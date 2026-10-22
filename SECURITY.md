@@ -55,8 +55,8 @@ saves, data-builder output or keys.
   warning.
 - **The game script:** `python scripts/verify_core.py ThorCompanion-core.lua ThorCompanion-core.sig` checks it against
   the release key in `game-script/keys/`. Public key fingerprints (SHA-256):
-  - release key (epoch 1): `KEY-FINGERPRINT-PENDING`
-  - recovery key: `KEY-FINGERPRINT-PENDING`
+  - release key (epoch 1): `8b43c8c3f8727e32b1a953b80de29c05876daef04d9f6c5a00f9c92b99322a7f`
+  - recovery key: `3bbb421a6fa43c7c6dfe094ecc4c14b332e7dd7c0dba3cf0c475b19b9b480a24`
 
 ## Reporting a problem
 Please report security issues privately through GitHub's "Report a vulnerability" (Security tab), not as a public

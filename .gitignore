@@ -16,3 +16,4 @@ FFXII_companion/
 *.vbf
 hook*.log
 local.env
+*.pem
