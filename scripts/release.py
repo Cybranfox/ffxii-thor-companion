@@ -97,7 +97,8 @@ def package(version):
             if f.is_file() and f.suffix in ('.py', '.txt', '.cmd'):
                 z.write(f, f'data-builder/{f.name}')
         z.write(ROOT / 'LICENSE', 'data-builder/LICENSE')
-    (dist / 'SHA256SUMS.txt').write_text(''.join(f'{sha256(p)}  {p.name}\n' for p in (apk, gs, bd)), encoding='utf-8')
+    (dist / 'SHA256SUMS.txt').write_text(''.join(f'{sha256(p)}  {p.name}\n' for p in (apk, gs, bd)), encoding='utf-8',
+                                          newline='\n')   # LF, so `sha256sum -c` works everywhere
     (dist / 'RELEASE_NOTES.md').write_text(notes(version) + '\n', encoding='utf-8')
     return dist
 
