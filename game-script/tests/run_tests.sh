@@ -8,6 +8,7 @@ cd "$(dirname "$0")"
 python test_verify.py
 python test_loader.py
 python test_reveal_family.py
+python test_target_family.py
 P="${FFXII_BATTLE_PACK:-}"; H="${FFXII_PROBE_HISTORY:-}"; S="${FFXII_SAVE_DUMP:-}"
 if [ -f "$P" ] && [ -f "$H" ]; then
   # With the save dump and the app's own command files (written by app/tests/run_tests.sh), the editor test also runs

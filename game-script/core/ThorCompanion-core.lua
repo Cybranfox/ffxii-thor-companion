@@ -360,6 +360,7 @@ local function capabilities()
     ["bpack.read"] = (game and game.bpack) and "probe" or "off",
     ["save.read"] = (save and save.u32) and "probe" or "off",
     ["party"] = "on",
+    ["target"] = "probe",
     ["battle"] = "probe",
     ["gambits"] = "probe",
     ["gambits.write"] = "probe",
@@ -1351,9 +1352,123 @@ local function partyState()
   return r
 end
 
+--0.13.0: what each field member is about to act on (read-only). Party_Target_Export_2026-10-22.md part B, checked
+--against the exe on 22 Oct: leader u8 P+0x5AA4 (0x3271D0); actor pool at qword [0x208E688], count s32 [0x208E6A0],
+--stride 0xF50 (0x236820); a member's actor has qword actor+0x698 == its record M (0x327150). u32 actor+0x710 is the
+--pending action's target handle and u16 actor+0x714 its action (0x30BB30). A handle is never an address: it is
+--resolved like 0x3588B0 (class (h>>16)&15 < 5, index h&0xFFFF, generation (h>>20)&0x7FF; manager 0x2098E10 +
+--class*0x288 with qword+0 and list qword+8 non-null, byte+0x10 bit0, index below s32+0x20 and s32[list]; wrapper =
+--qword list+8+8*index with u16 wrapper+0x16 == generation; actor = qword wrapper+0x30), and 0x31B7E0 also requires
+--u8 [0x2089340] & 0x10. The target's stat record D = qword T+0x698: HP s32 +0x48, max s32 +0x24 (effective max as for
+--the party), level u8 +0x1C2, status u32 +0x3C | +0x64, u8 +5 == 1 for an enemy. An enemy's live affinities (0x2FF2F9,
+--gear and effects included): weak +0x40, absorb +0x41, half +0x42, immune +0x43, potency +0x44, bits fire,
+--lightning, ice, earth, water, wind, holy, dark. Bestiary entry u16 [qword T+0xE68] + 0x52 (0x31B9A0), 0xFFFF none.
+--This is the action's target, not proven to be the on-screen cursor. Read twice; published only when both agree.
+--(Its own scope: the main chunk is at Lua's 200-local limit.)
+local targetState = (function()
+local ACTOR_POOL_PTR, ACTOR_COUNT, ACTOR_STRIDE, ACTOR_MAX = 0x208E688, 0x208E6A0, 0xF50, 1024
+local HANDLE_MGR, HANDLE_MGR_STRIDE, TARGET_GATE, LEADER_OFF = 0x2098E10, 0x288, 0x2089340, 0x5AA4
+
+local function nonNull(a) local v = memory.u64[a]; return v ~= 0 and v or nil end
+
+local function resolveHandle(h)
+  if h == 0 then return nil end
+  local class, index, gen = (h >> 16) & 0xF, h & 0xFFFF, (h >> 20) & 0x7FF
+  if class >= 5 then return nil end
+  local mgr = HANDLE_MGR + class * HANDLE_MGR_STRIDE
+  local list = nonNull(mgr + 8)
+  if not list or memory.u64[mgr] == 0 or (memory.u8[mgr + 0x10] & 1) == 0 then return nil end
+  if index >= s32(mgr + 0x20) or index >= s32(list) then return nil end
+  local wrapper = nonNull(list + 8 + 8 * index)
+  if not wrapper or memory.u16[wrapper + 0x16] ~= gen then return nil end
+  return nonNull(wrapper + 0x30)
+end
+
+local function effectiveMax(d)
+  local hp, max = s32(d + 0x48), s32(d + 0x24)
+  local f = memory.u32[d + 0x3C] | memory.u32[d + 0x64]
+  if f & 0x00010000 ~= 0 then max = math.max(hp, 1) elseif f & 0x10000000 ~= 0 then max = 2 * max end
+  return hp, max, f
+end
+
+local function describeTarget(t, d)
+  local hp, max, f = effectiveMax(d)
+  local r = { hp = { cur = hp, max = max }, level = memory.u8[d + 0x1C2], status = f }
+  local m = d - (GAMBIT_BASE + 8)
+  if memory.u8[d + 5] == 1 then
+    r.kind = "enemy"
+    r.weak, r.absorb, r.half = memory.u8[d + 0x40], memory.u8[d + 0x41], memory.u8[d + 0x42]
+    r.immune, r.potency = memory.u8[d + 0x43], memory.u8[d + 0x44]
+    local sec = nonNull(t + 0xE68)
+    local entry = sec and memory.u16[sec + 0x52]
+    if entry and entry ~= 0xFFFF then r.bestiary = entry end
+  elseif m >= 0 and m % BUILD_RECORD == 0 and m // BUILD_RECORD <= 0x27 then
+    r.kind = "member"
+    r.member = m // BUILD_RECORD
+  else
+    r.kind = "other"
+  end
+  return r
+end
+
+local function readTargets()
+  local byRecord, members = {}, {}
+  for slot = 0, PARTY_SLOTS - 1 do
+    local id = memory.u16[GAMBIT_BASE + PARTY_SLOTS_OFF + 2 * slot] & 0xFF
+    if id ~= 0xFF and id <= 0x27 then
+      byRecord[GAMBIT_BASE + 8 + id * BUILD_RECORD] = id
+      members[#members + 1] = id
+    end
+  end
+  local actors, base, n = {}, nonNull(ACTOR_POOL_PTR), s32(ACTOR_COUNT)
+  if base and n > 0 and n <= ACTOR_MAX then
+    for i = 0, n - 1 do
+      local a = base + i * ACTOR_STRIDE
+      local id = byRecord[memory.u64[a + 0x698]]
+      if id and not actors[id] then actors[id] = a end
+    end
+  end
+  local gate = (memory.u8[TARGET_GATE] & 0x10) ~= 0
+  local leader = memory.u8[GAMBIT_BASE + LEADER_OFF]
+  local out = {}
+  for _, id in ipairs(members) do
+    local e = { member = id, leader = (id == leader) or nil }
+    local a = actors[id]
+    if a then
+      local h = memory.u32[a + 0x710]
+      if h ~= 0 then
+        e.handle, e.action = h, memory.u16[a + 0x714]
+        local t = gate and resolveHandle(h)
+        local d = t and nonNull(t + 0x698)
+        if d then e.target = describeTarget(t, d) end
+      end
+    end
+    out[#out + 1] = e
+  end
+  return out
+end
+
+--Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
+return function()
+  local r = { contract = "ffxii.target.v1" }
+  if not supportedBuild() then r.status = "unsupported_build"; return r end
+  local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
+  if not okp then r.status = "read_failed"; return r end
+  if ptr ~= GAMBIT_BASE then r.status = "save_not_ready"; return r end
+  local ok1, a = pcall(readTargets)
+  local ok2, b = pcall(readTargets)
+  if not ok1 or not ok2 then r.status = "read_failed"; return r end
+  if encode(a) ~= encode(b) then r.status = "unstable"; return r end
+  r.status = "ok"
+  r.members = a
+  return r
+end
+end)()
+
 local function addReveal(data)
   if data.map then
     data.party = partyState()
+    data.target = targetState()
     --sampled just now, as this snapshot is built: stamp it with the snapshot's own clock (the receiver's freshness test
     --compares the two, and a later stamp would read as "time unknown")
     if data.party.status == "ok" then data.party.observedClockUs = data.session and data.session.clockUs end
@@ -1394,6 +1509,7 @@ local function writeSnapshot(force)
                           data.build and data.build.equipment and data.build.equipment.count,
                           data.build and data.build.licenceNodes and data.build.licenceNodes.count,
                           data.party and data.party.status, data.party and encode(data.party.members),
+                          data.target and data.target.status, data.target and encode(data.target.members),
                           data.battle and data.battle.status, data.battle and data.battle.flags,
                           data.battle and data.battle.changes))
   local now = safeCall(event.getClock) or 0
