@@ -49,6 +49,8 @@ class World:
         put(m, IMAGE_BASE + 0x3C, (0x100).to_bytes(4, 'little'))
         put(m, IMAGE_BASE + 0x100, b'PE\0\0' + bytes(4) + (1573552087).to_bytes(4, 'little'))
         put(m, 0x2EBF190, SAVE.to_bytes(8, 'little'))
+        if dump is None:
+            put(m, SAVE, (0x05071901).to_bytes(4, 'little'))      # the game's loaded-save marker (real dumps carry it)
         m[0x2B45A00] = 0x03 if field else 0x02
         if dump is None:
             self.stored = [bytes.fromhex(x) for x in probe['stored'].split(',')]

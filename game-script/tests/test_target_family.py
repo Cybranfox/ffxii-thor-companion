@@ -27,11 +27,13 @@ def handle(cls, index, gen):
 
 
 def world(**over):
-    o = dict(gate=0x10, gen=5, wrap_gen=5, cls=1, bestiary=77, count=3, bubble=False, save=True)
+    o = dict(gate=0x10, gen=5, wrap_gen=5, cls=1, bestiary=77, count=3, bubble=False, save=True, marker=True)
     o.update(over)
     mem = make_memory()
     if not o['save']:
         put(mem, 0x2EBF190, bytes(8))
+    if not o['marker']:
+        put(mem, GB, bytes(4))                     # P set at startup, no save loaded yet (title screen)
     put(mem, GB + 0x5A5A, struct.pack('<4H', 0, 3, 0xFFFF, 0xFFFF))     # field: Vaan, Balthier
     mem[GB + 0x5AA4] = 0                                                # leader: Vaan
     put(mem, 0x208E688, POOL.to_bytes(8, 'little'))
@@ -105,8 +107,11 @@ def main():
     t = world(count=-1)['target']
     assert all('handle' not in e for e in t['members'])
     assert world(save=False)['target'] == {'contract': 'ffxii.target.v1', 'status': 'save_not_ready'}
+    d = world(marker=False)
+    assert d['target'] == {'contract': 'ffxii.target.v1', 'status': 'save_not_ready'}
+    assert d['party'] == {'contract': 'ffxii.party.v1', 'status': 'save_not_ready'}
     ok += 1
-    print('PASS implausible pool counts read nothing; no save loaded -> save_not_ready')
+    print('PASS implausible pool counts read nothing; no save loaded, or P set but no save marker yet -> save_not_ready')
     print(f'{ok}/4 PASS. Pending-action targets on synthetic memory; stubs only, no writes.')
 
 

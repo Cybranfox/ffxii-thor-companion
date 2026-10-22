@@ -7,6 +7,8 @@
   each character has queued, which isn't always the same as the cursor you see on screen.
 - Game script: reads each field member's pending action target through the game's own handle checks. Read-only, like
   everything else it reads.
+- Fixed: at the title screen the game script could treat leftover memory as a loaded save (the party card showed
+  "invalid" HP for a moment). It now also checks the game's own "save loaded" marker before reading anything.
 
 ## 0.12.0-beta
 - **Exit labels on the map.** Where an area leads out of the region, the map now says where to, like "To the

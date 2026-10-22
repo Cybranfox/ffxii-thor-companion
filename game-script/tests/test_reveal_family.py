@@ -31,6 +31,8 @@ def make_memory(stamp=1573552087, nav=True, root=ROOT, record=REC_585, pos=(150.
     gb = 0x2164280 + 0x4E68C
     for i, b in enumerate(gb.to_bytes(8, 'little')):
         mem[0x2EBF190 + i] = b
+    for i, b in enumerate((0x05071901).to_bytes(4, 'little')):   # the game's loaded-save marker at P (0x233C4D)
+        mem[gb + i] = b
     for i, b in enumerate(struct.pack('<HH', 0x60B5, 0x0052) + b'\xff' * 44 + struct.pack('<HB', 0x0001, 12)):
         mem[gb + 0x5B10 + 3 * 0x9C + i] = b             # Balthier set 1 slot 1: Ally HP<50% -> Potion, on
     lfanew = 0x100

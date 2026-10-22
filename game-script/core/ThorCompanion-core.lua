@@ -448,6 +448,12 @@ end
 --commits here when the player leaves the Gambits screen. Read every GAMBITS_MS and on map jumps, twice, change-only.
 local GAMBIT_SAVE_PTR = 0x2EBF190
 local GAMBIT_BASE = 0x2164280 + 0x4E68C
+--0.13.0: a save is loaded when [0x2EBF190] points at the save region AND the region starts with the game's own marker
+--0x05071901 (the game checks it at 0x233C4D). The pointer alone is set at startup too (0x238A92), before any save
+--loads (Map_Icons_Flags_2026-10-22.md), so on its own it let the title screen through with leftover values.
+local function saveLoaded()
+  return memory.u64[GAMBIT_SAVE_PTR] == GAMBIT_BASE and memory.u32[GAMBIT_BASE] == 0x05071901
+end
 local GAMBIT_SETS = 0x5B10
 local GAMBIT_STRIDE = 0x9C
 local GAMBIT_MEMBERS = 6
@@ -487,7 +493,7 @@ local function gambitState()
   else
     local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
     if not okp then r.status = "read_failed"
-    elseif ptr ~= GAMBIT_BASE then r.status = "save_not_ready"
+    elseif ptr ~= GAMBIT_BASE or not saveLoaded() then r.status = "save_not_ready"
     else
       local ok1, a = pcall(readGambitSets)
       local okA, act1 = pcall(readActiveSets)
@@ -809,7 +815,7 @@ end
 
 local function planEdit(cmd)
   if not supportedBuild() then return nil, "unsupported_build" end
-  if memory.u64[GAMBIT_SAVE_PTR] ~= GAMBIT_BASE then return nil, "save_not_ready" end
+  if not saveLoaded() then return nil, "save_not_ready" end
   if manifestoSingleList() ~= false then return nil, "manifesto_36_slot_on_or_unknown" end
   if memory.u32[MAP_FLAGS] & 1 ~= 1 then return nil, "not_in_field" end
   local t = condTable()
@@ -863,7 +869,7 @@ end
 
 local function planSetActive(cmd)
   if not supportedBuild() then return nil, "unsupported_build" end
-  if memory.u64[GAMBIT_SAVE_PTR] ~= GAMBIT_BASE then return nil, "save_not_ready" end
+  if not saveLoaded() then return nil, "save_not_ready" end
   if manifestoSingleList() ~= false then return nil, "manifesto_36_slot_on_or_unknown" end
   if memory.u32[MAP_FLAGS] & 1 ~= 1 then return nil, "not_in_field" end
   for _, a in ipairs(GAMBIT_MENU_PANELS) do
@@ -1226,7 +1232,7 @@ local function buildState()
   else
     local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
     if not okp then r.status = "read_failed"
-    elseif ptr ~= GAMBIT_BASE then r.status = "save_not_ready"
+    elseif ptr ~= GAMBIT_BASE or not saveLoaded() then r.status = "save_not_ready"
     else
       local ok1, a = pcall(readBuild)
       local ok2, b = pcall(readBuild)
@@ -1342,7 +1348,7 @@ local function partyState()
   if not supportedBuild() then r.status = "unsupported_build"; return r end
   local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
   if not okp then r.status = "read_failed"; return r end
-  if ptr ~= GAMBIT_BASE then r.status = "save_not_ready"; return r end
+  if ptr ~= GAMBIT_BASE or not saveLoaded() then r.status = "save_not_ready"; return r end
   local ok1, a = pcall(readParty)
   local ok2, b = pcall(readParty)
   if not ok1 or not ok2 then r.status = "read_failed"; return r end
@@ -1454,7 +1460,7 @@ return function()
   if not supportedBuild() then r.status = "unsupported_build"; return r end
   local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
   if not okp then r.status = "read_failed"; return r end
-  if ptr ~= GAMBIT_BASE then r.status = "save_not_ready"; return r end
+  if ptr ~= GAMBIT_BASE or not saveLoaded() then r.status = "save_not_ready"; return r end
   local ok1, a = pcall(readTargets)
   local ok2, b = pcall(readTargets)
   if not ok1 or not ok2 then r.status = "read_failed"; return r end
