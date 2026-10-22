@@ -82,6 +82,10 @@ def package(version):
     dist.mkdir(parents=True)
     apk = dist / f'{NAME}-{version}.apk'
     shutil.copy(ROOT / 'app/build/ffxii-companion.apk', apk)
+    names = zipfile.ZipFile(apk).namelist()
+    want = {f'assets/install/{f}' for f in ('ThorCompanion.lua', 'install.cmd', 'uninstall.cmd', 'README.txt')}
+    if not want <= set(names) or any('\' in n for n in names):
+        sys.exit(f'APK assets wrong (Android needs forward slashes): {[n for n in names if "assets" in n]}')
     gs = dist / f'{NAME}-game-script-{version}.zip'
     with zipfile.ZipFile(gs, 'w', zipfile.ZIP_DEFLATED) as z:
         z.write(ROOT / 'game-script/ThorCompanion.lua', 'ThorCompanion.lua')

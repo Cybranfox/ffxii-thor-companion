@@ -33,3 +33,4 @@ jobs:
           echo "$perms"
           if echo "$perms" | grep -q INTERNET; then echo "INTERNET permission found"; exit 1; fi
           if unzip -p app/build/ffxii-companion.apk classes.dex | grep -aq "Great Eastern Passage"; then echo "game text in dex"; exit 1; fi
+          python -c "import zipfile,sys; n=zipfile.ZipFile('app/build/ffxii-companion.apk').namelist(); a=[x for x in n if x.startswith('assets/install/')]; print(a); sys.exit(0 if len(a)==4 and not any(chr(92) in x for x in n) else 1)"

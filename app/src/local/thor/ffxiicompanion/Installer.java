@@ -17,11 +17,14 @@ import java.util.Arrays;
 final class Installer {
     static final String[] FILES = {"ThorCompanion.lua", "install.cmd", "uninstall.cmd", "README.txt"};
 
+    /** Why the last sync failed (shown under Details), or null. */
+    static volatile String lastError;
+
     private Installer() {}
 
     /** Number of files written (0 = already current); -1 when the folder can't be written (no storage access). */
     static int sync(AssetManager assets, File dir) {
-        if (!dir.isDirectory() && !dir.mkdirs()) return -1;
+        if (!dir.isDirectory() && !dir.mkdirs()) { lastError = "cannot create " + dir; return -1; }
         int written = 0;
         for (String name : FILES) {
             try (InputStream in = assets.open("install/" + name)) {
@@ -32,10 +35,12 @@ final class Installer {
                     out.write(want);
                 }
                 written++;
-            } catch (IOException e) {
+            } catch (IOException | RuntimeException e) {
+                lastError = name + ": " + e;
                 return -1;
             }
         }
+        lastError = null;
         return written;
     }
 

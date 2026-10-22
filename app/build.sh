@@ -13,10 +13,12 @@ rm -rf build && mkdir -p build/classes build/dex
 # The matching game script and container installer ride along as assets (written to Download/FFXII_companion/install).
 mkdir -p build/assets/install
 cp ../game-script/ThorCompanion.lua ../game-script/container/install.cmd ../game-script/container/uninstall.cmd    ../game-script/container/README.txt build/assets/install/
-"$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml -A build/assets
+"$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml
 "${JAVA_BIN}javac" -source 11 -target 11 -Xlint:-options -encoding UTF-8 -cp "$JAR" -d build/classes $(find src -name '*.java')
 "$BT/d8$EXE" --release --min-api 30 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
 (cd build/dex && "${JAVA_BIN}jar" uf ../base.apk classes.dex)
+# Assets via jar, not aapt2 -A: aapt2 on Windows stores asset paths with backslashes, which Android cannot open.
+(cd build && "${JAVA_BIN}jar" uf base.apk assets)
 "$BT/zipalign" -f 4 build/base.apk build/aligned.apk
 if [ -n "${RELEASE_KEYSTORE:-}" ]; then
   "$BT/apksigner$EXE" sign --ks "$RELEASE_KEYSTORE" --ks-pass env:RELEASE_KEYSTORE_PASS --ks-key-alias "${RELEASE_KEY_ALIAS:-ffxii-companion}" \

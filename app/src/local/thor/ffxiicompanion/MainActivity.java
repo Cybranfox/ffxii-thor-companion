@@ -492,7 +492,10 @@ public class MainActivity extends Activity {
             return;
         }
         grant.setVisibility(View.GONE);
-        if (!installSynced) installSynced = Installer.sync(getAssets(), INSTALL_DIR) >= 0;
+        if (!installSynced) {
+            installSynced = Installer.sync(getAssets(), INSTALL_DIR) >= 0;
+            if (!installSynced) android.util.Log.w("FFXIICompanion", "install folder: " + Installer.lastError);
+        }
 
         Snapshot[] slots = new Snapshot[SLOTS.length];
         int malformed = 0;
