@@ -28,9 +28,13 @@ final class Reference {
     final List<Entry> gear, bestiary;
     private final Map<Integer, String> namesById = new java.util.HashMap<>();
     private final Map<Integer, Entry> gearById = new java.util.HashMap<>();
+    private final Map<Integer, Entry> bestiaryByKey = new java.util.HashMap<>();
 
     /** The reference entry for an ID (equipment 0x1000+index, as the game stores it in a member record), or null. */
     Entry gearById(int id) { return gearById.get(id); }
+
+    /** The bestiary entry for the game's own bestiary key (the pack's "entry"; 0.13.0 enemy panel), or null. */
+    Entry bestiaryByKey(int key) { return bestiaryByKey.get(key); }
 
     /** Gear/magick/technick/item name by its battle-pack index (DED id), or null. */
     String nameOf(int id) { return namesById.get(id); }
@@ -93,7 +97,7 @@ final class Reference {
         if (!FORMAT.equals(Json.str(root, "format")) || !"REFERENCE".equals(Json.str(root, "kind"))) return null;
         List<Entry> gear = new ArrayList<>(), best = new ArrayList<>();
         Map<Integer, String> ids = new java.util.HashMap<>();
-        Map<Integer, Entry> byId = new java.util.HashMap<>();
+        Map<Integer, Entry> byId = new java.util.HashMap<>(), byKey = new java.util.HashMap<>();
         List<Object> g = Json.arr(root, "gear"), b = Json.arr(root, "bestiary");
         if (g != null) {
             for (Object o : g) {
@@ -117,13 +121,17 @@ final class Reference {
                     if (!lines.isEmpty()) lines.add("");
                     for (Object l : (List<?>) p) if (l instanceof String && !"Items".equals(l)) lines.add((String) l);
                 }
-                best.add(new Entry(name, null, Collections.emptyList(), lines, strings(Json.arr(o, "locations"))));
+                Entry e = new Entry(name, null, Collections.emptyList(), lines, strings(Json.arr(o, "locations")));
+                Long key = Json.lng(o, "entry");
+                if (key != null) byKey.putIfAbsent(key.intValue(), e);
+                best.add(e);
             }
         }
         if (gear.isEmpty() && best.isEmpty()) return null;
         Reference r = new Reference(Collections.unmodifiableList(gear), Collections.unmodifiableList(best));
         r.namesById.putAll(ids);
         r.gearById.putAll(byId);
+        r.bestiaryByKey.putAll(byKey);
         Map<String, Object> ga = Json.obj(root, "gambitActions");
         if (ga != null) {
             for (Map.Entry<String, Object> e : ga.entrySet()) {

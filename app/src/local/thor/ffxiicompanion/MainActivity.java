@@ -75,6 +75,7 @@ public class MainActivity extends Activity {
     final Handler handler = new Handler(Looper.getMainLooper());
     TextView title, status, statusDetail, banner, location, locationName, locationChip, session, build, mods, caps, partyChip, partyNote, detailsToggle;
     LinearLayout partyRow, partyCard, locationCard, details, mapCard;
+    LinearLayout targetCard, targetRows;   // 0.13.0: what the party is acting on
     TextView mapChip, mapNote;
     RevealMapView mapView, bigMap;      // 0.12.0: bigMap = the full-screen region map
     LinearLayout mapPage;
@@ -266,6 +267,15 @@ public class MainActivity extends Activity {
         location.setEllipsize(TextUtils.TruncateAt.END);
         locationCard.addView(location);
         body.addView(locationCard, cardParams(-1, 0));
+
+        // Targeting (0.13.0): the enemy the party's pending actions are aimed at; only shown while there is one.
+        targetCard = cardShell();
+        targetCard.addView(cardHeading("TARGETING"));
+        targetRows = new LinearLayout(this);
+        targetRows.setOrientation(LinearLayout.VERTICAL);
+        targetCard.addView(targetRows);
+        targetCard.setVisibility(View.GONE);
+        body.addView(targetCard, cardParams(-1, 0));
 
         // Map: the explored parts of the region around the current area (gated by Reveal), with the player marker.
         mapCard = cardShell();
@@ -601,6 +611,7 @@ public class MainActivity extends Activity {
 
         showParty(v);
         showLocation(v);
+        showTarget(v);
         showMap(v);
         showGambits(v);
         showGear(v);
@@ -708,6 +719,63 @@ public class MainActivity extends Activity {
         lp.topMargin = dp(2);
         box.addView(bar, lp);
         return box;
+    }
+
+    /** 0.13.0: the leader's target first, at most two enemies; live and verified data only, like the party. */
+    void showTarget(ReceiverState.View v) {
+        Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
+        boolean ok = s != null && v.locationFamily.state == ReceiverState.FamilyState.LIVE
+                && (s.synthetic ? fixtureMode : Reveal.buildVerified(s.hello()));
+        List<Target.Enemy> enemies = ok ? Target.enemies(Json.obj(s.data, "target")) : java.util.Collections.emptyList();
+        targetRows.removeAllViews();
+        targetCard.setVisibility(enemies.isEmpty() ? View.GONE : View.VISIBLE);
+        for (int i = 0; i < Math.min(2, enemies.size()); i++) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(4);
+            targetRows.addView(enemyRow(enemies.get(i)), lp);
+        }
+        if (enemies.size() > 2) {
+            TextView more = text("+" + (enemies.size() - 2) + " more", 11, DIM, false);
+            targetRows.addView(more);
+        }
+    }
+
+    View enemyRow(Target.Enemy e) {
+        LinearLayout r = new LinearLayout(this);
+        r.setOrientation(LinearLayout.VERTICAL);
+        r.setPadding(dp(8), dp(4), dp(8), dp(5));
+        r.setBackground(round(TRACK, 6));
+        Reference.Entry entry = reference != null && e.bestiary != null ? reference.bestiaryByKey(e.bestiary) : null;
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        TextView n = text(entry != null ? entry.name : "Enemy", 14, TEXT, true);
+        oneLine(n);
+        head.addView(n, new LinearLayout.LayoutParams(0, -2, 1));
+        StringBuilder by = new StringBuilder();
+        for (int m : e.targetedBy) {
+            if (m < 0 || m >= Gambits.MEMBERS.length) continue;
+            by.append(by.length() > 0 ? ", " : "").append(Gambits.MEMBERS[m]);
+        }
+        TextView meta = text("Lv " + e.level + (by.length() > 0 ? " · " + by : ""), 11, DIM, false);
+        oneLine(meta);
+        head.addView(meta);
+        r.addView(head);
+        r.addView(vital("HP", new Party.Vital(e.hp, e.maxHp), false, BAD));
+        List<String> aff = Target.affinities(e);
+        TextView a = text(aff.isEmpty() ? "No elemental weaknesses" : String.join(" · ", aff), 12,
+                aff.isEmpty() ? DIM : TEXT, false);
+        a.setMaxLines(2);
+        a.setEllipsize(TextUtils.TruncateAt.END);
+        a.setPadding(0, dp(3), 0, 0);
+        r.addView(a);
+        if (entry != null) r.setOnClickListener(x -> openBestiary(entry));
+        return r;
+    }
+
+    /** Opens the Bestiary tab on this entry. */
+    void openBestiary(Reference.Entry entry) {
+        selectTab(3);
+        bestiaryView.open(entry);
     }
 
     private long areasStamp = -1;

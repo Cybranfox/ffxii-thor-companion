@@ -126,7 +126,8 @@ final class ReferenceView extends LinearLayout {
         list.setVisibility(VISIBLE);
     }
 
-    private void open(Reference.Entry e) {
+    /** Shows one entry's detail page (also used by the Targeting card, 0.13.0). */
+    void open(Reference.Entry e) {
         detailTitle.setText(e.name);
         SpannableStringBuilder b = new SpannableStringBuilder();
         String sub = source.subtitle(e);

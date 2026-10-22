@@ -1,5 +1,13 @@
 # Changelog
 
+## Unreleased (0.13.0)
+- **Targeting card.** When your party is about to act on an enemy, the Status page shows it: name (from your data
+  pack's bestiary), level, HP, and what it's weak to, absorbs or is immune to, live from the game, so gear and effects
+  count. It says who's targeting it, and tapping it opens that enemy's bestiary page. This is the target of the action
+  each character has queued, which isn't always the same as the cursor you see on screen.
+- Game script: reads each field member's pending action target through the game's own handle checks. Read-only, like
+  everything else it reads.
+
 ## 0.12.0-beta
 - **Exit labels on the map.** Where an area leads out of the region, the map now says where to, like "To the
   Estersand", the same names the game's map uses. They show up next to areas you've already visited.

@@ -11,7 +11,7 @@ the game in real time.
 
 | Tab | What you get |
 |---|---|
-| **Status** | Where you are, a map of the areas you have explored with a "you are here" marker and exit labels (tap it for a full-size map you can zoom and drag), and live party HP/MP. |
+| **Status** | Where you are, a map of the areas you have explored with a "you are here" marker and exit labels (tap it for a full-size map you can zoom and drag), live party HP/MP, and the enemy your party is targeting (level, HP, weaknesses). |
 | **Gambits** | Every member's gambits as the game has them right now, with item counts ("Potion ×14", "0 left" warnings). **Suggest** builds a gambit set from what that character owns and is licensed for. The optional **editor** can apply a change or a whole suggested set to the running game, and switch which set (I/II/III) a character uses. |
 | **Equip** | Each member's equipped gear, plus what the game's own **Optimize** would change. Descriptions come from optional mods. |
 | **Bestiary** | Bestiary pages by location (with an optional mod). |
