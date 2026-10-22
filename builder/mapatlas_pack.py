@@ -7,7 +7,7 @@ Output folder (pushed to /sdcard/Download/FFXII_companion/atlas/ on the Thor; ne
   <mapId>_<region>_<index>.png  8-bit grayscale coverage mask (sheet value 0..127 doubled), no colour or tint:
               the game's runtime palette/tint for these masks is still unknown.
   regions.json  format "ffxii-companion-regions-1": per region file, where each sheet sits in the game's region
-              view and the connector lines. Rule (evidence/map_assets/region_layout, 21 Oct 2026): a sheet's top-left
+              view, the connector lines and (0.12) the exit labels (menumap_names.py). Rule (evidence/map_assets/region_layout, 21 Oct 2026): a sheet's top-left
               corner is its menumap_location.bin ('lmap') point and 1 layout unit = 4 sheet pixels; overlaying that
               composite on the Thor's Zertinan Caverns region screen put every visited neighbour on the game's ink.
 Each index.json entry also carries "slot" (reveal record slot from the game's navimapdata.bin, null = none) and
@@ -30,6 +30,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 import menumap_sloc  # noqa: E402
+import menumap_names  # noqa: E402
 import menumap_tables  # noqa: E402
 import navimap_index  # noqa: E402
 import menumap_tile_index  # noqa: E402
@@ -56,6 +57,12 @@ def main(vbf, out):
     names = sorted(k for k in index if k.startswith(menumap_tile_index.PREFIX) and k.endswith('.bin'))
     _, nav = navimap_index.parse(vbf_extract.extract(f, index[NAV], blocks))
     lmap = menumap_tables.parse_location(vbf_extract.extract(f, index[LOCATION], blocks))
+    labels = {}
+    if menumap_names.PATH in index:                 # exit labels are optional: no file, no labels
+        try:
+            labels = menumap_names.parse(vbf_extract.extract(f, index[menumap_names.PATH], blocks))
+        except ValueError as e:
+            print('exit labels skipped:', e)
 
     def slot_of(map_id):
         if map_id >= len(nav):
@@ -76,7 +83,7 @@ def main(vbf, out):
                             'tiles': menumap_tile_index.occupancy(s['mask']),
                             'origin': {k: round(v, 4) for k, v in s['nps2'].items()},
                             'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
-        regions.append(region_layout(region, [e for e in entries if e['region'] == region], lmap))
+        regions.append(region_layout(region, [e for e in entries if e['region'] == region], lmap, labels))
     per_map = {}
     for e in entries:
         per_map[e['mapId']] = per_map.get(e['mapId'], 0) + 1
@@ -90,13 +97,13 @@ def main(vbf, out):
     regions = [r for r in regions if r]
     (out / 'regions.json').write_text(json.dumps({'format': REGIONS_FORMAT, 'unitsPerSheetPx': UNITS_PER_SHEET_PX,
                                                   'regions': regions}, separators=(',', ':')), encoding='utf-8')
-    print('regions with layout', len(regions))
+    print('regions with layout', len(regions), 'exit labels', sum(len(r['exits']) for r in regions))
     total = sum(e['bytes'] for e in entries)
     print(out, len(entries), 'sheets', f'{total / 1e6:.1f} MB PNG', 'multi-sheet maps',
           sum(1 for v in per_map.values() if v > 1))
 
 
-def region_layout(region, sheets, lmap):
+def region_layout(region, sheets, lmap, names=None):
     """Pairs a region file's sheets with its lmap record (record k = menumap_subKK; the k-th sheet of a map ID
     takes that ID's k-th lmap entry). None when the file has no record or the map lists differ."""
     if not region.startswith('sub') or not region[3:].isdigit() or int(region[3:]) >= len(lmap):
@@ -112,7 +119,8 @@ def region_layout(region, sheets, lmap):
         placed.append({'mapId': s['mapId'], 'sheet': s['sheet'], 'file': s['file'], 'x': m['x'], 'y': m['y']})
     links = [{'a': l['map_a'], 'b': l['map_b'], 'ax': l['a'][0], 'ay': l['a'][1], 'bx': l['b'][0], 'by': l['b'][1]}
              for l in rec['links']]
-    return {'region': region, 'sheets': placed, 'links': links}
+    return {'region': region, 'sheets': placed, 'links': links,
+            'exits': menumap_names.exit_labels(rec['exits'], names or {})}
 
 
 if __name__ == '__main__':

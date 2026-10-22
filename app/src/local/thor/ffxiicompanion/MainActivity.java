@@ -76,7 +76,9 @@ public class MainActivity extends Activity {
     TextView title, status, statusDetail, banner, location, locationName, locationChip, session, build, mods, caps, partyChip, partyNote, detailsToggle;
     LinearLayout partyRow, partyCard, locationCard, details, mapCard;
     TextView mapChip, mapNote;
-    RevealMapView mapView;
+    RevealMapView mapView, bigMap;      // 0.12.0: bigMap = the full-screen region map
+    LinearLayout mapPage;
+    TextView mapRecentre, mapPageNote;
     File atlasDir = ATLAS_DIR;
     Atlas atlas;
     String atlasProblem = "map atlas not loaded yet";
@@ -241,6 +243,7 @@ public class MainActivity extends Activity {
         licencesView = new LicencesView(this);
         licencesView.setVisibility(View.GONE);
         root.addView(licencesView, new LinearLayout.LayoutParams(-1, 0, 1));
+        root.addView(buildMapPage(), new LinearLayout.LayoutParams(-1, 0, 1));
         referenceMissing = text("", 13, DIM, false);
         referenceMissing.setPadding(dp(6), dp(10), dp(6), dp(10));
         referenceMissing.setVisibility(View.GONE);
@@ -272,8 +275,9 @@ public class MainActivity extends Activity {
         mapChip = chip();
         mapHead.addView(mapChip);
         mapCard.addView(mapHead);
-        mapView = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK);
+        mapView = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK, TEXT, BG, 10, false);
         mapView.setVisibility(View.GONE);
+        mapView.setOnClickListener(x -> openMap(true));
         LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-1, dp(190));
         mlp.topMargin = dp(4);
         mapCard.addView(mapView, mlp);
@@ -328,6 +332,51 @@ public class MainActivity extends Activity {
         return frame;
     }
 
+    /** 0.12.0: the whole explored region, full height, with pinch zoom and pan. Opened by tapping the map card. */
+    View buildMapPage() {
+        mapPage = new LinearLayout(this);
+        mapPage.setOrientation(LinearLayout.VERTICAL);
+        mapPage.setVisibility(View.GONE);
+        LinearLayout head = new LinearLayout(this);
+        head.setGravity(Gravity.CENTER_VERTICAL);
+        head.addView(cardHeading("MAP"), new LinearLayout.LayoutParams(0, -2, 1));
+        mapRecentre = pageButton("Re-centre");
+        mapRecentre.setVisibility(View.GONE);
+        mapRecentre.setOnClickListener(x -> bigMap.recentre());
+        head.addView(mapRecentre);
+        TextView close = pageButton("Close");
+        close.setOnClickListener(x -> openMap(false));
+        LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-2, -2);
+        clp.leftMargin = dp(8);
+        head.addView(close, clp);
+        mapPage.addView(head);
+        bigMap = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK, TEXT, BG, 12, true);
+        bigMap.setOnMoved(moved -> mapRecentre.setVisibility(moved ? View.VISIBLE : View.GONE));
+        LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, 0, 1);
+        blp.topMargin = dp(4);
+        mapPage.addView(bigMap, blp);
+        mapPageNote = text("Pinch to zoom, drag to move. Double-tap: this area / the whole region.", 11, DIM, false);
+        oneLine(mapPageNote);
+        mapPageNote.setPadding(0, dp(3), 0, 0);
+        mapPage.addView(mapPageNote);
+        return mapPage;
+    }
+
+    TextView pageButton(String s) {
+        TextView t = text(s, 13, TEXT, true);
+        t.setPadding(dp(12), dp(5), dp(12), dp(5));
+        t.setBackground(round(CARD, 14));
+        return t;
+    }
+
+    /** Shows the full map in place of the Status page, or goes back to it. */
+    void openMap(boolean open) {
+        if (open && tab != 0) return;
+        mapPage.setVisibility(open ? View.VISIBLE : View.GONE);
+        liveScroll.setVisibility(open || tab != 0 ? View.GONE : View.VISIBLE);
+        if (open) bigMap.recentre();
+    }
+
     TextView cardHeading(String s) {
         TextView h = text(s, 11, ACCENT, true);
         heading(h);
@@ -350,6 +399,7 @@ public class MainActivity extends Activity {
     void selectTab(int i) {
         tab = i;
         styleTabs();
+        mapPage.setVisibility(View.GONE);
         liveScroll.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
         gearView.setVisibility(View.GONE);
         bestiaryView.setVisibility(View.GONE);
@@ -708,6 +758,9 @@ public class MainActivity extends Activity {
             mapView.setVisibility(View.GONE);
             mapView.set(null, null, null, MASK_SAMPLE);
             mapView.setMarker(null, null, false);
+            bigMap.set(null, null, null, MASK_SAMPLE);
+            bigMap.setMarker(null, null, false);
+            if (mapPage.getVisibility() == View.VISIBLE) openMap(false);
             mapNote.setText("No map for this area.");
             mapNote.setVisibility(View.VISIBLE);
             return;
@@ -733,10 +786,12 @@ public class MainActivity extends Activity {
         }
         setChip(mapChip, v.locationFamily);
         mapView.setVisibility(View.VISIBLE);
-        mapView.set(drawable, rv.links, masks, MASK_SAMPLE);
+        mapView.set(rv, drawable, masks, MASK_SAMPLE);
+        bigMap.set(rv, drawable, masks, MASK_SAMPLE);
         Position.Marker mk = Position.locate(v.location, d.sheet, fixtureMode);
         boolean live = v.locationFamily.state == ReceiverState.FamilyState.LIVE;
         mapView.setMarker(mk.reason == null ? mk.px : null, mk.reason == null ? mk.py : null, live);
+        bigMap.setMarker(mk.reason == null ? mk.px : null, mk.reason == null ? mk.py : null, live);
         mapNote.setText("");                                   // 0.22.0: the map speaks for itself
         mapNote.setVisibility(View.GONE);
     }

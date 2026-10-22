@@ -1,9 +1,14 @@
 # Changelog
 
-## Unreleased
-- Code tidy-up, no changes you should notice: file reading and the Details panel text moved out of the main screen
-  into their own small classes (with tests), the three views share one set of text/background helpers, and a few
-  unused bits are gone.
+## 0.12.0-beta
+- **Exit labels on the map.** Where an area leads out of the region, the map now says where to, like "To the
+  Estersand", the same names the game's map uses. They show up next to areas you've already visited.
+- **A bigger map you can move around.** Tap the map on the Status page to open it full size. It shows everything
+  you've explored in the region. Pinch to zoom, drag to move, double-tap to jump between the area you're in and the
+  whole region. Re-centre puts it back.
+- The short lines from an area out to its exits are drawn now too.
+- **Re-run the data builder once** to get the exit labels. Without it the map works as before, just without labels.
+- Under the hood: some tidying in the app's code. Nothing you should notice.
 
 ## 0.11.0-beta
 - **Updates install themselves.** Run `install.cmd` one last time and it puts a small loader in the game. After that,

@@ -14,6 +14,12 @@ import java.util.Map;
  * neighbour on the game's ink (evidence/map_assets/region_layout). Like the game, unvisited areas are not drawn:
  * a neighbour needs a non-zero record in data.revealTable (ThorCompanion.lua 0.4.1+), and its tiles are gated by
  * those bits exactly like the current area. The current area itself always comes from Reveal.decide.
+ *
+ * Exit labels (0.12.0, optional "exits" per region, built by the data builder from menu_mapname.bin): the game draws
+ * each label at the exit's second point and only dims it while the route is locked, so labels are no spoiler. The
+ * companion still shows a label only next to explored ground: an exit's point usually lies off the area's ink, at the
+ * end of a short line, so each exit belongs to the area whose sheet is nearest, and its label shows when that area is
+ * drawn.
  */
 final class Regions {
     static final String FORMAT = "ffxii-companion-regions-1";
@@ -34,11 +40,21 @@ final class Regions {
         }
     }
 
+    /** An exit: its point (x, y), where its label goes (lx, ly), all in layout units, and the label. */
+    static final class Exit {
+        final int x, y, lx, ly;
+        final String text;
+        Exit(int x, int y, int lx, int ly, String text) { this.x = x; this.y = y; this.lx = lx; this.ly = ly; this.text = text; }
+    }
+
     static final class Region {
         final String name;
         final List<Placed> sheets;
         final List<Link> links;
-        Region(String name, List<Placed> sheets, List<Link> links) { this.name = name; this.sheets = sheets; this.links = links; }
+        final List<Exit> exits;
+        Region(String name, List<Placed> sheets, List<Link> links, List<Exit> exits) {
+            this.name = name; this.sheets = sheets; this.links = links; this.exits = exits;
+        }
     }
 
     /** One drawable area: atlas sheet, layout position, which tiles to draw. */
@@ -52,6 +68,8 @@ final class Regions {
     static final class View {
         final List<Part> parts = new ArrayList<>();
         final List<Link> links = new ArrayList<>();
+        final List<Exit> exits = new ArrayList<>();
+        String region;          // region file name, or null when unknown
         String note;            // why neighbours are missing, or null
         int neighbours;
     }
@@ -93,7 +111,16 @@ final class Regions {
                 if (a == null || b == null || ax == null || ay == null || bx == null || by == null) continue;
                 links.add(new Link(a.intValue(), b.intValue(), ax.intValue(), ay.intValue(), bx.intValue(), by.intValue()));
             }
-            Region reg = new Region(name, Collections.unmodifiableList(placed), Collections.unmodifiableList(links));
+            List<Exit> exits = new ArrayList<>();
+            List<Object> ex = Json.arr(r, "exits");   // absent in data packs built before 0.12.0
+            if (ex != null) for (Object e : ex) {
+                Long x = Json.lng(e, "x"), y = Json.lng(e, "y"), lx = Json.lng(e, "lx"), ly = Json.lng(e, "ly");
+                String label = Json.str(e, "text");
+                if (x == null || y == null || lx == null || ly == null || label == null || label.isEmpty() || label.length() > 64) continue;
+                exits.add(new Exit(x.intValue(), y.intValue(), lx.intValue(), ly.intValue(), label));
+            }
+            Region reg = new Region(name, Collections.unmodifiableList(placed), Collections.unmodifiableList(links),
+                    Collections.unmodifiableList(exits));
             for (Placed p : placed) out.byFile.put(p.file, reg);
         }
         return out.byFile.isEmpty() ? null : out;
@@ -145,6 +172,7 @@ final class Regions {
         }
         for (Placed p : reg.sheets) if (p.file.equals(current.sheet.file)) { focus.x = p.x; focus.y = p.y; }
         v.parts.add(focus);
+        v.region = reg.name;
         boolean full = current.mode == Reveal.Mode.FULL;
         Map<Integer, byte[]> table = full ? null : table(s);
         Long liveSlot = Json.lng(Json.obj(s.data, "reveal"), "slot");
@@ -187,7 +215,44 @@ final class Regions {
             v.neighbours++;
             shownMaps.add(sh.mapId);
         }
-        for (Link l : reg.links) if (l.a != l.b && shownMaps.contains(l.a) && shownMaps.contains(l.b)) v.links.add(l);
+        // A link from an area to itself is the line out to one of its exits (all 99 in the game end at an exit point).
+        for (Link l : reg.links) if (shownMaps.contains(l.a) && shownMaps.contains(l.b)) v.links.add(l);
+        for (Exit e : reg.exits) {
+            Integer owner = nearestMap(reg.sheets, atlas, e.x, e.y);
+            if (owner != null && shownMaps.contains(owner)) v.exits.add(e);
+        }
         return v;
+    }
+
+    /** The map ID whose sheet rectangle (layout units) is nearest to point (x, y); null when no sheet is in the atlas. */
+    static Integer nearestMap(List<Placed> sheets, Atlas atlas, int x, int y) {
+        Integer best = null;
+        double bestD = Double.MAX_VALUE;
+        for (Placed p : sheets) {
+            Atlas.Sheet sh = atlas.sheet(p.file);
+            if (sh == null) continue;
+            double w = sh.width / 4.0, h = sh.height / 4.0;
+            double dx = Math.max(0, Math.max(p.x - x, x - (p.x + w))), dy = Math.max(0, Math.max(p.y - y, y - (p.y + h)));
+            double d = dx * dx + dy * dy;
+            if (d < bestD) { bestD = d; best = p.mapId; }
+        }
+        return best;
+    }
+
+    /** Layout-unit bounds {x0, y0, x1, y1} of the drawn tiles of the given parts (all, or only the focus), or null. */
+    static float[] bounds(List<Part> parts, boolean focusOnly) {
+        float tu = Reveal.TILE / 4f;
+        float x0 = Float.MAX_VALUE, y0 = Float.MAX_VALUE, x1 = -Float.MAX_VALUE, y1 = -Float.MAX_VALUE;
+        for (Part p : parts) {
+            if (p.visible == null || (focusOnly && !p.focus)) continue;
+            for (int y = 0; y < p.visible.length; y++) {
+                for (int x = 0; x < p.visible[y].length; x++) {
+                    if (!p.visible[y][x]) continue;
+                    x0 = Math.min(x0, p.x + x * tu); y0 = Math.min(y0, p.y + y * tu);
+                    x1 = Math.max(x1, p.x + (x + 1) * tu); y1 = Math.max(y1, p.y + (y + 1) * tu);
+                }
+            }
+        }
+        return x1 < x0 ? null : new float[] { x0, y0, x1, y1 };
     }
 }

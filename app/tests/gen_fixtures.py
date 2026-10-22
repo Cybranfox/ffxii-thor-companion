@@ -183,7 +183,12 @@ REGIONS = {'format': 'ffxii-companion-regions-1', 'unitsPerSheetPx': 0.25, 'synt
      'links': [{'a': 585, 'b': 581, 'ax': 300, 'ay': 400, 'bx': 330, 'by': 420},
                {'a': 578, 'b': 581, 'ax': 439, 'ay': 430, 'bx': 399, 'by': 447},
                {'a': 588, 'b': 585, 'ax': 200, 'ay': 150, 'bx': 280, 'by': 170},
-               {'a': 585, 'b': 585, 'ax': 348, 'ay': 188, 'bx': 348, 'by': 140}]}]}
+               {'a': 585, 'b': 585, 'ax': 348, 'ay': 188, 'bx': 348, 'by': 140}],
+     # 0.12.0 exit labels: one beside 578 (visited), one beside 588 (unvisited), two malformed
+     'exits': [{'x': 560, 'y': 500, 'lx': 575, 'ly': 500, 'text': 'To Synthetic East', 'gate': 65535},
+               {'x': 100, 'y': 60, 'lx': 90, 'ly': 50, 'text': 'To Nowhere', 'gate': 27},
+               {'x': 1, 'y': 1, 'lx': 1, 'text': 'No anchor'},
+               {'x': 424, 'y': 368, 'lx': 440, 'ly': 360, 'text': 'x' * 65}]}]}
 
 MALFORMED = {
     'malformed_truncated': '{"v":1,"type":"snapshot","seq":30,"data":{"session":{"clockUs":1',

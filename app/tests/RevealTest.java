@@ -112,8 +112,33 @@ public final class RevealTest {
                 if (p.sheet.mapId == 581) check(p.focus && p.x == 320 && p.y == 417, "focus placed at its lmap point");
             }
             check(p578 != null && p578.visible[7][0] && !p578.visible[8][0] && p578.x == 416, "578 gated by its own record");
-            check(rv.links.size() == 2, "links: 585-581 and 578-581 only, got " + rv.links.size());
+            check(rv.links.size() == 3, "links: 585-581, 578-581 and 585's exit line, got " + rv.links.size());
             ok("region view: visited neighbours gated by their records, unvisited hidden, links between shown areas only");
+        }
+        { // 0.12.0 exit labels: only where explored; malformed entries dropped; old packs simply have none
+            Snapshot s = fx("region_table");
+            Regions.View rv = regions.build(Reveal.decide(s, atlas, true), s, atlas);
+            check(rv.exits.size() == 1 && rv.exits.get(0).text.equals("To Synthetic East") && rv.exits.get(0).lx == 575,
+                    "one explored exit label, got " + rv.exits.size());
+            check("synthetic".equals(rv.region), "view names its region");
+            Regions old = Regions.parse("{\"format\":\"ffxii-companion-regions-1\",\"unitsPerSheetPx\":0.25,\"regions\":[{\"region\":"
+                    + "\"synthetic\",\"sheets\":[{\"mapId\":581,\"sheet\":0,\"file\":\"581_synthetic_0.png\",\"x\":320,\"y\":417}],\"links\":[]}]}");
+            check(old != null && old.build(Reveal.decide(s, atlas, true), s, atlas).exits.isEmpty(), "pre-0.12 regions file: no labels");
+            check(Regions.nearestMap(regions.regionOf("578_synthetic_0.png").sheets, atlas, 560, 500) == 578
+                    && Regions.nearestMap(regions.regionOf("578_synthetic_0.png").sheets, atlas, 100, 60) == 588,
+                    "an exit belongs to the nearest sheet");
+            Regions.Part p = new Regions.Part();
+            p.x = 100; p.y = 200;
+            p.visible = new boolean[4][4];
+            p.visible[1][2] = true;                    // tile (2, 1) = layout x 132..148, y 216..232
+            java.util.List<Regions.Part> one = java.util.Collections.singletonList(p);
+            float[] b = Regions.bounds(one, false);
+            check(b != null && b[0] == 132 && b[1] == 216 && b[2] == 148 && b[3] == 232, "bounds of drawn tiles");
+            check(Regions.bounds(one, true) == null, "focus-only bounds ignore other parts");
+            float[] all = Regions.bounds(rv.parts, false), cur = Regions.bounds(rv.parts, true);
+            check(all[0] <= cur[0] && all[1] <= cur[1] && all[2] >= cur[2] && all[3] >= cur[3]
+                    && (all[2] - all[0]) * (all[3] - all[1]) > (cur[2] - cur[0]) * (cur[3] - cur[1]), "region fit covers more than the area");
+            ok("exit labels only beside areas the player has visited; old packs have none; full-map fit covers every shown area");
         }
         {
             Snapshot s = fx("region_no_table");
@@ -130,7 +155,7 @@ public final class RevealTest {
         {
             Snapshot s = fx("region_bundle_full");
             Regions.View rv = regions.build(Reveal.decide(s, atlas, true), s, atlas);
-            check(rv.parts.size() == 4 && rv.links.size() == 3, "Bundle full reveal: all four areas, three links");
+            check(rv.parts.size() == 4 && rv.links.size() == 4, "Bundle full reveal: all four areas, all four links");
             ok("Bundle fullyRevealedMaps: whole region, as the game shows it");
         }
         { // Position marker: sheet px = 4 * (x - x0), 4 * (z - z0); spot A of the Thor test -> (350.6, 112.2)

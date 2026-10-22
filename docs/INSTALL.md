@@ -36,7 +36,7 @@ Skip this if the loaders already work for you (other Lua mods load).
    with any existing one.
 
 Run it again after you add or remove the optional text mods (Dynamic Equipment Description / Descriptive Inventory,
-Foedex Clan Primer). The folder is built from your files for your own use. Please don't share it.
+Foedex Clan Primer), and once for 0.12.0, which adds the map's exit labels. The folder is built from your files for your own use. Please don't share it.
 
 ## 2. Install the app (Thor)
 
