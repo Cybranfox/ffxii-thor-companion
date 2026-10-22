@@ -84,7 +84,7 @@ def package(version):
     shutil.copy(ROOT / 'app/build/ffxii-companion.apk', apk)
     names = zipfile.ZipFile(apk).namelist()
     want = {f'assets/install/{f}' for f in ('ThorCompanion.lua', 'install.cmd', 'uninstall.cmd', 'README.txt')}
-    if not want <= set(names) or any('\' in n for n in names):
+    if not want <= set(names) or any(chr(92) in n for n in names):   # chr(92) = backslash
         sys.exit(f'APK assets wrong (Android needs forward slashes): {[n for n in names if "assets" in n]}')
     gs = dist / f'{NAME}-game-script-{version}.zip'
     with zipfile.ZipFile(gs, 'w', zipfile.ZIP_DEFLATED) as z:
