@@ -9,6 +9,7 @@ Usage: python -I test_gambit_editor.py <battle_pack.bin> <gambit-probe 0.2.0 his
 import json
 import struct
 import sys
+import re
 import time
 from pathlib import Path
 
@@ -481,10 +482,14 @@ def main():
         assert w.writes == [] and w.last()['reason'] == 'ownership_unknown', w.last()
         ok += 1; total += 1
         print('PASS setslot refused past the unlocked slot count and when the ownership lists are implausible')
+    def restamp(path):
+        # The Java tests wrote these files earlier; the game script refuses commands older than 2 minutes, so
+        # re-stamp `issued` with now. Every other byte is the app's own.
+        return re.sub(r'(?m)^issued=\d+$', f'issued={int(time.time())}', Path(path).read_text(encoding='ascii'))
     if len(sys.argv) > 3:                             # the receiver's own command text (GambitEditTest.java)
         total += 1
         w = World(pack, probe)
-        w.disk[CMD] = Path(sys.argv[3]).read_text(encoding='ascii')
+        w.disk[CMD] = restamp(sys.argv[3])
         w.tick(); w.flip(); w.tick()
         assert w.last()['status'] == 'applied' and w.last()['after'] == '607e:0052:007f' and w.replica_ok(0), w.last()
         ok += 1
@@ -493,7 +498,7 @@ def main():
         total += 1
         w = World(pack, probe)
         rt0 = w.runtime_bytes(0)
-        w.disk[CMD] = Path(sys.argv[4]).read_text(encoding='ascii')
+        w.disk[CMD] = restamp(sys.argv[4])
         w.tick(); w.flip(); w.tick()
         assert w.last()['status'] == 'applied' and w.last()['op'] == 'set' and w.last()['after'] == '60b5:0052:003f', w.last()
         assert w.slot(0, 0, 6) == (0x60B5, 0x0052, 0x003F) and w.runtime_bytes(0) == rt0 and w.replica_ok(0)
@@ -502,7 +507,7 @@ def main():
     if len(sys.argv) > 6:                             # the receiver's own setslot command (ApplyTest.java), same dump
         total += 1
         w = World(pack, probe, dump=Path(sys.argv[5]).read_bytes())
-        txt = Path(sys.argv[6]).read_text(encoding='ascii')
+        txt = restamp(sys.argv[6])
         w.disk[CMD] = txt
         w.tick(); w.flip(); w.tick()
         f = dict(l.split('=', 1) for l in txt.splitlines()[1:])
