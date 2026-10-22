@@ -25,7 +25,7 @@ There are three pieces, and each only does its own job:
 3. **The data builder** (PC, Python) builds names, licence boards and map sheets from **your own** game files. You run it
    once and copy its output to the Thor.
 
-Demo video: *(Reddit link)* · Install guide: **[docs/INSTALL.md](docs/INSTALL.md)**
+**[▶ Watch the 90-second demo](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.9.0-beta/FFXII_Thor_Companion_launch_0.9.0-beta.mp4)** · Install guide: **[docs/INSTALL.md](docs/INSTALL.md)**
 
 ## Requirements
 
@@ -99,6 +99,13 @@ with the same release key, so updates install over the previous version.
 
 Open an issue with your device, GameNative version, game version and what you saw. Screenshots of both screens help.
 Please don't attach save files or anything built by the data builder: it contains game text.
+
+## How it was made
+
+I built this with a lot of help from AI coding assistants. They wrote much of the code and the research tooling, and
+helped work out how the game stores its data. The idea, the design, and the decisions about what's safe to ship are
+mine, and I tested every feature by playing on my own Thor before it went in. If you spot something that looks off,
+please tell me.
 
 ## Credits and licence
 
