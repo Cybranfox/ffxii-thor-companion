@@ -5,6 +5,8 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 [ -f local.env ] && . ./local.env   # git-ignored: FFXII_BATTLE_PACK FFXII_PROBE_HISTORY FFXII_SAVE_DUMP
+python test_verify.py
+python test_loader.py
 python test_reveal_family.py
 P="${FFXII_BATTLE_PACK:-}"; H="${FFXII_PROBE_HISTORY:-}"; S="${FFXII_SAVE_DUMP:-}"
 if [ -f "$P" ] && [ -f "$H" ]; then

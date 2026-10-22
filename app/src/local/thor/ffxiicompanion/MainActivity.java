@@ -540,7 +540,15 @@ public class MainActivity extends Activity {
         }
 
         String bad = v.malformedReads > 0 ? " " + v.malformedReads + " unreadable snapshot file(s) skipped." : "";
-        switch (v.transport) {
+        // 0.11.0: the loader's receipt. A refusal written after the newest snapshot means this game start ran no script.
+        File receipt = new File(dir, "loader_status.json");
+        long newestSnapshot = 0;
+        for (String s : SLOTS) newestSnapshot = Math.max(newestSnapshot, new File(dir, s).lastModified());
+        String loaderResult = receipt.isFile() && receipt.length() <= LoaderStatus.MAX_BYTES ? LoaderStatus.result(readText(receipt)) : null;
+        String loaderProblem = receipt.lastModified() > newestSnapshot ? LoaderStatus.message(loaderResult) : null;
+        if (loaderProblem != null && v.transport != ReceiverState.Transport.LIVE) {
+            setStatus("Not running", BAD, loaderProblem);
+        } else switch (v.transport) {
             case NO_DATA:
                 setStatus("Waiting", DIM, "Start FFXII to begin. First time? Run install.cmd from Download/FFXII_companion/install"
                         + " in the game's GameNative container (see README.txt there)." + bad);
@@ -559,7 +567,8 @@ public class MainActivity extends Activity {
                 break;
             default: {
                 Map<String, Object> hello = v.current != null ? v.current.hello() : null;
-                String hint = Place.updateHint(hello != null ? Json.str(Json.obj(hello, "producer"), "version") : null, appVersion());
+                String hint = LoaderStatus.updateHint(hello != null ? Json.str(Json.obj(hello, "producer"), "version") : null,
+                        appVersion(), loaderResult != null);
                 setStatus("Live", GOOD, ((hint != null ? hint + " " : "") + bad).trim());
             }
         }

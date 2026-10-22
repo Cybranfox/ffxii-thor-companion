@@ -19,7 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import gambit_names  # noqa: E402
 import gambit_runtime  # noqa: E402
 
-SRC = Path(__file__).resolve().parents[1].joinpath('ThorCompanion.lua').read_text(encoding='utf-8')
+SRC = Path(__file__).resolve().parents[1].joinpath('core', 'ThorCompanion-core.lua').read_text(encoding='utf-8')
 IMAGE_BASE = 0x120000
 SAVE = 0x2164280 + 0x4E68C
 SETS = SAVE + 0x5B10
@@ -603,6 +603,32 @@ def main():
     assert w.last()['persisted'] is False
     ok += 1
     print('PASS setactive persistence re-reads the index: a later native switch is reported, not overwritten')
+    # ---- 0.11.0 command-channel hardening ----
+    total += 3
+    w = World(pack, probe)
+    w.disk[CMD] = 'ffxii.gambitcmd.v1' + chr(10) + 'id=test-too-large' + chr(10) + ('x' * 5000)
+    w.tick(); w.flip(); w.tick()
+    assert w.writes == [] and w.last()['reason'] == 'too_large' and CMD not in w.disk, w.last()
+    ok += 1
+    print('PASS command file over 4 KB: refused unread, removed, no writes')
+    for extra, reason in (('evil=1', 'unknown_field'), ('member=1', 'duplicate_field')):
+        w = World(pack, probe)
+        w.command(0, 0, 6, 'enable', 'test-grammar-' + reason.replace('_', '-'))
+        w.disk[CMD] += extra + chr(10)
+        w.tick(); w.flip(); w.tick()
+        assert w.writes == [] and w.last()['reason'] == reason, w.last()
+    ok += 1
+    print('PASS unknown or repeated command fields refused, no writes')
+    w = World(pack, probe, field=False)               # valid requests, refused later (not in the field)
+    def resend(n):
+        w.command(0, 0, 6, 'enable', f'test-seen-{n:04d}')
+        w.tick(600)
+        return w.last()['reason']
+    for n in range(300):
+        resend(n)
+    assert resend(299) == 'duplicate_id' and resend(0) != 'duplicate_id'
+    ok += 1
+    print('PASS replay memory is bounded: after 300 requests the oldest id is forgotten, recent ones still refused')
     jf = Path(__file__).resolve().parents[2] / 'app/tests/out/java_setactive_cmd.txt'
     if jf.is_file():                                   # the app's command uses exactly the fields this script reads
         lines = jf.read_text(encoding='ascii').splitlines()

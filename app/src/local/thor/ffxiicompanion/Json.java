@@ -45,7 +45,10 @@ final class Json {
     static Long lng(Object o, String key) {
         Object v = o instanceof Map ? ((Map<String, Object>) o).get(key) : null;
         if (v instanceof Long) return (Long) v;
-        if (v instanceof Double && (Double) v == Math.rint((Double) v)) return ((Double) v).longValue();
+        if (v instanceof Double) {   // 0.11.0: only exact whole numbers within long range (no 1e999 -> Long.MAX_VALUE)
+            double d = (Double) v;
+            if (d == Math.rint(d) && Math.abs(d) < 9.0e15) return (long) d;
+        }
         return null;
     }
 
@@ -92,6 +95,7 @@ final class Json {
             ws();
             expect(':');
             ws();
+            if (m.containsKey(k)) throw err("duplicate key");   // 0.11.0: shared-storage input is read strictly
             m.put(k, value(depth + 1));
             ws();
             if (peek(',')) { i++; continue; }
@@ -163,7 +167,9 @@ final class Json {
         if (!real) {
             try { return Long.parseLong(t); } catch (NumberFormatException x) { /* too large: fall through */ }
         }
-        return Double.parseDouble(t);
+        double d = Double.parseDouble(t);
+        if (Double.isInfinite(d) || Double.isNaN(d)) throw err("number out of range");
+        return d;
     }
 
     private boolean digits() {

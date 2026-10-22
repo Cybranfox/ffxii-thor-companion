@@ -20,8 +20,10 @@ the game in real time.
 There are three pieces, and each only does its own job:
 
 1. **The app** (`.apk`) runs on the Thor's bottom screen and reads files. It has no network access.
-2. **The game script** (`ThorCompanion.lua`) runs inside the game under ffgriever's LUA Script Loader. It reads the
-   game's state and writes it as small JSON files to `Download/FFXII_companion/live` on the device.
+2. **The game script** runs inside the game under ffgriever's LUA Script Loader. It reads the game's state and writes
+   it as small JSON files to `Download/FFXII_companion/live` on the device. It comes inside the app: a small **loader**
+   (`ThorCompanion.lua`), installed once, checks the script's signature at every game start and only runs a genuine,
+   current copy. So after the first install, **updating is just installing the new app**.
 3. **The data builder** (PC, Python) builds names, licence boards and map sheets from **your own** game files. You run it
    once and copy its output to the Thor.
 
@@ -48,6 +50,8 @@ by the editor (the editor refuses to run then). Everything else still works.
 - The app **does not request Internet access**, so Android won't let it reach the network at all. You can check this
   in Android's app info, or with `aapt dump permissions` on the APK.
 - The game script never opens a network connection. It only writes inside `Download/FFXII_companion/`.
+- The only keys involved are the developer's game-script signing keys (kept passphrase-encrypted, never in this
+  repository); the app and the loader carry only their public halves. They prove a release is genuine, not who you are.
 - The data builder reads your local game files and writes a local folder. The only network use is the first-run
   `pip install` of numpy and Pillow from PyPI into a private folder next to the builder.
 - Nothing is uploaded anywhere. Your saves are never read as files and never written.
@@ -63,6 +67,13 @@ by the editor (the editor refuses to run then). Everything else still works.
   every change against the live game before writing: right build, slot still as expected, gambit owned, action owned
   and licensed. It never edits saves. Your next in-game save stores the change, like any change you make in the menu.
   Turning it off works immediately.
+- **The editor's files aren't authenticated.** Its on-switch and requests are files in shared storage, so another app
+  with all-files access could create them. Requests still have to pass every game-side check above, so they can only
+  make gambit changes you could make yourself, but keep the editor off if you don't trust your other apps with storage
+  access. Pairing the app with the game is planned. Details: [SECURITY.md](SECURITY.md).
+- **Signed game script.** The loader runs only scripts signed with the developer's key and never an older one than it
+  has already run. The check is pure Lua, passes the RFC 8032 test vectors and tamper tests, but isn't independently
+  audited. The very first `install.cmd` has to be trusted as-is.
 - **Read-only everywhere else.** The game script reads memory and writes only its own JSON files. It calls no game
   functions.
 - **Supported build only.** The script checks the game executable's build stamp and stays blank on anything else.
@@ -79,11 +90,13 @@ by the editor (the editor refuses to run then). Everything else still works.
 
 Install:
 1. Run the **data builder** on your PC, then copy `FFXII_companion` into the Thor's `Download` folder.
-2. Install the **APK** on the Thor and open it once. Grant "All files access" when asked. It puts the matching game
-   script and installer in `Download/FFXII_companion/install`.
-3. In GameNative, open the game's container and run `D:\FFXII_companion\install\install.cmd`. Then play.
+2. Install the **APK** on the Thor and open it once. Grant "All files access" when asked. It puts the loader, the signed
+   game script and the installer in `Download/FFXII_companion/install`.
+3. Once only: in GameNative, open the game's container and run `D:\FFXII_companion\install\install.cmd`. Then play.
 
-Remove: run `uninstall.cmd` the same way (it deletes only `ThorCompanion.lua`), uninstall the app, and delete
+Update: install the new APK over the old one and restart the game. That's it.
+
+Remove: run `uninstall.cmd` the same way (it deletes the loader and its record), uninstall the app, and delete
 `Download/FFXII_companion`.
 
 Full steps, including the one-time GameNative setup for the loaders: **[docs/INSTALL.md](docs/INSTALL.md)**.
@@ -91,7 +104,7 @@ Full steps, including the one-time GameNative setup for the loaders: **[docs/INS
 ## Source code, building and releases
 
 Everything is in this repository: `app/` (Android, plain Java, no Gradle), `game-script/` (Lua), `builder/` (Python),
-and `scripts/release.py` (the one-command release). The data protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
+and `scripts/release.py` (the release; the developer signs each game script by hand with `scripts/sign_core.py`). The data protocol is in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 Releases on GitHub carry the APK, the game-script zip, the data-builder zip and `SHA256SUMS.txt`. Every APK is signed
 with the same release key, so updates install over the previous version.
 

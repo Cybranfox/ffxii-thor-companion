@@ -10,7 +10,7 @@ from pathlib import Path
 
 from lupa import LuaRuntime
 
-SRC = Path(__file__).resolve().parents[1].joinpath('ThorCompanion.lua').read_text(encoding='utf-8')
+SRC = Path(__file__).resolve().parents[1].joinpath('core', 'ThorCompanion-core.lua').read_text(encoding='utf-8')
 IMAGE_BASE = 0x120000
 NAV = 0x30000000
 ROOT = 0x2164280 + 0x8200

@@ -14,7 +14,7 @@ jobs:
       - name: Android SDK pieces
         run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-35" "build-tools;35.0.1" > /dev/null
       - name: Python test deps
-        run: pip install lupa numpy Pillow
+        run: pip install lupa numpy Pillow cryptography
       - name: App tests (pure JVM; real-game tests skip without private data)
         run: JDK="$JAVA_HOME" bash app/tests/run_tests.sh
       - name: Game script tests
@@ -33,4 +33,4 @@ jobs:
           echo "$perms"
           if echo "$perms" | grep -q INTERNET; then echo "INTERNET permission found"; exit 1; fi
           if unzip -p app/build/ffxii-companion.apk classes.dex | grep -aq "Great Eastern Passage"; then echo "game text in dex"; exit 1; fi
-          python -c "import zipfile,sys; n=zipfile.ZipFile('app/build/ffxii-companion.apk').namelist(); a=[x for x in n if x.startswith('assets/install/')]; print(a); sys.exit(0 if len(a)==4 and not any(chr(92) in x for x in n) else 1)"
+          python -c "import zipfile,sys; n=zipfile.ZipFile('app/build/ffxii-companion.apk').namelist(); a=set(x for x in n if x.startswith('assets/install/')); print(sorted(a)); need={'assets/install/'+f for f in ('ThorCompanion-core.lua','install.cmd','uninstall.cmd','README.txt')}; sys.exit(0 if need<=a and not any(chr(92) in x for x in n) else 1)"

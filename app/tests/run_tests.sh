@@ -10,12 +10,13 @@ python -I tests/gen_fixtures.py
 rm -rf tests/classes && mkdir -p tests/classes
 P=src/local/thor/ffxiicompanion
 "$JDK/bin/javac" -source 11 -target 11 -Xlint:-options -encoding UTF-8 -d tests/classes \
-  $P/Json.java $P/Snapshot.java $P/Party.java $P/ReceiverState.java $P/SnapshotOrder.java $P/Place.java \
+  $P/Json.java $P/Snapshot.java $P/Party.java $P/ReceiverState.java $P/SnapshotOrder.java $P/Place.java $P/LoaderStatus.java \
   $P/AutoClosePolicy.java $P/Atlas.java $P/Reveal.java $P/Regions.java $P/Position.java $P/Reference.java $P/Gambits.java $P/GambitEdit.java $P/Build.java $P/LicenceNodes.java $P/GambitPlan.java $P/ApplyPlan.java $P/Equipped.java $P/EquipTable.java $P/Optimize.java $P/ItemCheck.java $P/LicenceBoards.java $P/LicenceRules.java \
-  tests/SnapshotOrderTest.java tests/ReceiverStateTest.java tests/AutoClosePolicyTest.java tests/RevealTest.java tests/ReferenceTest.java tests/GambitsTest.java tests/GambitEditTest.java tests/BuildTest.java tests/GambitPlanTest.java tests/ApplyTest.java tests/OptimizeTest.java tests/LicenceBoardsTest.java tests/LicenceRulesTest.java tests/PlaceTest.java tests/ActionNamesTest.java tests/SetActiveTest.java
+  tests/SnapshotOrderTest.java tests/ReceiverStateTest.java tests/AutoClosePolicyTest.java tests/RevealTest.java tests/ReferenceTest.java tests/GambitsTest.java tests/GambitEditTest.java tests/BuildTest.java tests/GambitPlanTest.java tests/ApplyTest.java tests/OptimizeTest.java tests/LicenceBoardsTest.java tests/LicenceRulesTest.java tests/PlaceTest.java tests/ActionNamesTest.java tests/SetActiveTest.java tests/LoaderStatusTest.java
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.AutoClosePolicyTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.SnapshotOrderTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.PlaceTest
+"$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.LoaderStatusTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.ActionNamesTest
 mkdir -p tests/out
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.SetActiveTest tests/out

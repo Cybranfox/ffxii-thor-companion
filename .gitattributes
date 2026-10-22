@@ -4,3 +4,4 @@
 game-script/container/README.txt text eol=crlf
 *.png binary
 *.apk binary
+*.lua text eol=lf

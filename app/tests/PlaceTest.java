@@ -22,8 +22,6 @@ public final class PlaceTest {
         check(Place.name(12L).equals("Title screen") && Place.from(12L, 0L).isEmpty(), "title screen (unnamed map 12)");
         Place.setNames(Place.parse("{\"format\":\"ffxii-companion-areas-1\",\"names\":{\"12\":\"Real Area\"}}"));
         check(Place.name(12L).equals("Real Area"), "a pack that names map 12 wins");
-        check(Place.updateHint("0.9.0-beta", "0.10.0-beta").contains("install.cmd") && Place.updateHint("0.10.0-beta", "0.10.0-beta") == null
-                && Place.updateHint(null, "0.10.0-beta") == null, "update hint only on a real mismatch");
-        System.out.println("PASS PlaceTest 13 checks (names only from areas.json; loading ids read \"Loading…\")");
+        System.out.println("PASS PlaceTest 12 checks (names only from areas.json; loading ids read \"Loading…\")");
     }
 }

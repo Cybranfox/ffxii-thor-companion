@@ -14,7 +14,7 @@ from lupa import LuaRuntime
 sys.path.insert(0, str(Path(__file__).resolve().parents[2] / 'builder'))
 import gambit_names  # noqa: E402
 
-SRC = Path(__file__).resolve().parents[1].joinpath('ThorCompanion.lua').read_text(encoding='utf-8')
+SRC = Path(__file__).resolve().parents[1].joinpath('core', 'ThorCompanion-core.lua').read_text(encoding='utf-8')
 IMAGE_BASE = 0x120000
 SAVE = 0x2164280 + 0x4E68C
 REGION, REGION_BYTES = 0x2164280, 0x56690

@@ -10,9 +10,19 @@ BT="$SDK/build-tools/${BUILD_TOOLS:-35.0.1}"
 JAR="$SDK/platforms/android-35/android.jar"
 JAVA_BIN="${JDK:+$JDK/bin/}"
 rm -rf build && mkdir -p build/classes build/dex
-# The matching game script and container installer ride along as assets (written to Download/FFXII_companion/install).
+# The loader stub, the signed game script and the container installer ride along as assets (written to
+# Download/FFXII_companion/install). Releases pass INSTALL_STAGE (scripts/release.py: stub + signed core + signature).
+# Development/CI builds carry the unsigned core only; a real loader refuses it, which is the point.
 mkdir -p build/assets/install
-cp ../game-script/ThorCompanion.lua ../game-script/container/install.cmd ../game-script/container/uninstall.cmd    ../game-script/container/README.txt build/assets/install/
+if [ -n "${INSTALL_STAGE:-}" ]; then
+  cp "$INSTALL_STAGE"/* build/assets/install/
+else
+  cp ../game-script/core/ThorCompanion-core.lua ../game-script/container/install.cmd ../game-script/container/uninstall.cmd \
+     ../game-script/container/README.txt build/assets/install/
+  if [ -f ../game-script/keys/release-epoch1.pub ]; then
+    python -B ../scripts/build_stub.py --out build/assets/install/ThorCompanion.lua > /dev/null
+  fi
+fi
 "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml
 "${JAVA_BIN}javac" -source 11 -target 11 -Xlint:-options -encoding UTF-8 -cp "$JAR" -d build/classes $(find src -name '*.java')
 "$BT/d8$EXE" --release --min-api 30 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')

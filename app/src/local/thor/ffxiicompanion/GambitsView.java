@@ -173,6 +173,7 @@ final class GambitsView extends LinearLayout {
         if (f == null) return;
         if (f.isFile()) {
             if (!f.delete()) editError = "Could not turn the editor off (file in use).";
+            new File(cmdDir, GambitEdit.CMD_FILE).delete();   // 0.11.0: switching off also drops any waiting request
         } else if (!armAsking) {
             armAsking = true;
         } else {

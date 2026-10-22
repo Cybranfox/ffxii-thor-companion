@@ -1,4 +1,6 @@
---ThorCompanion.lua: game-side script for the FFXII Thor Companion (https://github.com/Cybranfox/ffxii-thor-companion).
+--ThorCompanion-core.lua: game-side script for the FFXII Thor Companion (https://github.com/Cybranfox/ffxii-thor-companion).
+--From 0.11.0 it is not installed in the game folder itself: the small loader there (ThorCompanion.lua, game-script/loader)
+--checks this file's signature at every game start and only then runs it, as a text chunk in the normal Lua environment.
 --Runs under ffgriever's FF12 LUA Script Loader. Reads the running game's state (location, map, party HP/MP, gambits,
 --licences, gear, stock) and writes it as JSON to OUT_DIR for the companion app on the second screen.
 --Read-only, except the opt-in gambit editor: it stays OFF unless <BASE_DIR>cmd/ARMED existed when the game started,
@@ -306,7 +308,9 @@ local function revealState(mapId)
   return r
 end
 
---A mod's config file is a Lua chunk returning plain tables; it runs with an empty environment (no globals, no I/O).
+--A mod's config file (in the game folder, written by that mod) is a Lua chunk returning tables. It is run, as text, with
+--an empty environment: no globals, no I/O, no game access. That is not a sandbox against a hostile file (a loop could
+--still hang it); it is only used for the Insurgent's Manifesto's own config, which the player installed.
 local function readConfigTable(path)
   local fn = loadfile(path, "t", {})
   if not fn then return nil end
@@ -711,6 +715,13 @@ local function validAction(a)
   return a <= 0x50 or (a >= 0x52 and a <= 0x91) or a == 0x96 or (a >= 0x9E and a <= 0x9E + 0x17)
 end
 
+--0.11.0 hardening (Secure_Loader_Design): the command file lives in shared storage, so its size, fields and the replay
+--memory are all bounded.
+local CMD_MAX_BYTES, SEEN_MAX = 4096, 256
+local CMD_FIELDS = { id = true, issued = true, member = true, set = true, slot = true, op = true, cond = true, action = true,
+                     bits = true, newCond = true, newAction = true, from = true, stored = true }
+local editSeenOrder = {}
+
 local function parseCommand(text)
   local lines = {}
   for line in text:gmatch("[^\r\n]+") do lines[#lines + 1] = line end
@@ -719,6 +730,8 @@ local function parseCommand(text)
   for i = 2, #lines do
     local k, v = lines[i]:match("^(%a+)=([%w%-]+)$")
     if not k then return nil, "bad_line" end
+    if not CMD_FIELDS[k] then return nil, "unknown_field" end   --0.11.0: exact grammar: known fields, each once
+    if c[k] ~= nil then return nil, "duplicate_field" end
     c[k] = v
   end
   local function dec(s, lo, hi)
@@ -1002,17 +1015,20 @@ local function editTick()
   editLogQueue = {}
   local f = io.open(EDIT_CMD, "r")
   if not f then return end
-  local text = f:read("a") or ""
+  local text = f:read(CMD_MAX_BYTES + 1) or ""
   f:close()
   if not os.remove(EDIT_CMD) then
     local r = editResult(nil, "rejected", "cannot_consume")
     if editLast == nil or editLast.reason ~= "cannot_consume" then finishEdit(r) end
     return
   end
+  if #text > CMD_MAX_BYTES then finishEdit(editResult(nil, "rejected", "too_large")); return end
   local cmd, why, partial = parseCommand(text)
   if not cmd then finishEdit(editResult(partial, "rejected", why)); return end
   if editSeen[cmd.id] then finishEdit(editResult(cmd, "rejected", "duplicate_id")); return end
   editSeen[cmd.id] = true
+  editSeenOrder[#editSeenOrder + 1] = cmd.id
+  if #editSeenOrder > SEEN_MAX then editSeen[table.remove(editSeenOrder, 1)] = nil end
   if not fileExists(EDIT_ARM) then finishEdit(editResult(cmd, "rejected", "not_armed")); return end
   if not editHooked then finishEdit(editResult(cmd, "rejected", "editor_not_started")); return end
   local age = os.time() - cmd.issued

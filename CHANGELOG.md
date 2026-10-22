@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.11.0-beta
+- **Updates install themselves.** A small loader goes into the game once (`install.cmd`, one last time). After that,
+  installing a new app version is the whole update: at the next game start the loader checks the new game script's
+  Ed25519 signature and runs it. Unsigned, altered, older or unknown-key scripts never run, and the app explains why in
+  plain words ("The game reports: …").
+- **Two signing keys:** a release key signs each game script by hand, passphrase-protected and never in the
+  repository. A separate offline recovery key can only replace a lost or leaked release key.
+- **Hardening:** the editor's request files are capped at 4 KB with a strict format, its replay memory is bounded, and
+  switching the editor off also drops any waiting request. The app's JSON reader refuses duplicate keys and
+  out-of-range numbers. The app writes its install files through temporary files.
+- **Honest docs:** SECURITY.md and the README now spell out what the signature protects and what it doesn't (the first
+  install, the unauthenticated editor files, other mods), and that the signature check is new and not independently
+  audited.
+
 ## 0.10.0-beta
 - **Switch gambit sets from the companion.** With the editor on, each set's heading shows "· in use" or a **Use this
   set…** button. The switch happens straight away in the field and is checked by the game first. It's refused while

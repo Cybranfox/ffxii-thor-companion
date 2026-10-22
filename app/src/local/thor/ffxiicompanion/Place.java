@@ -57,15 +57,4 @@ final class Place {
         if (previousId == null || loading(mapId) || loading(previousId) || title(mapId) || previousId.equals(mapId)) return "";
         return "from " + name(previousId);
     }
-
-    /**
-     * 0.10.0: the game script and this app ship together and share a version. When the running script is a different
-     * version, the copy in Download/FFXII_companion/install is the matching one: say so. Null when they match or either
-     * is unknown.
-     */
-    static String updateHint(String running, String bundled) {
-        if (running == null || bundled == null || running.isEmpty() || bundled.isEmpty() || running.equals(bundled)) return null;
-        return "The game is running script " + running + "; this app brings " + bundled
-                + ". Run install.cmd again (Download/FFXII_companion/install) and restart the game.";
-    }
 }

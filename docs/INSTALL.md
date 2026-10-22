@@ -46,7 +46,10 @@ Foedex Clan Primer). The folder is built from your files for your own use. Pleas
    is needed to read the files GameNative writes (see the README for why).
 3. The app now puts the matching game script and its installer in `Download/FFXII_companion/install`.
 
-## 3. Install the game script (GameNative container)
+## 3. Install the loader (GameNative container, once)
+
+This puts the companion's small loader in the game. You do it once: after this, new versions of the game script
+arrive with the app and the loader checks and runs them by itself.
 
 1. In GameNative: FINAL FANTASY XII › Options › **Open container**.
 2. In the file manager: **D:** › `FFXII_companion` › `install` › double-tap **`install.cmd`**.
@@ -69,15 +72,20 @@ one.
 
 ## Updating
 
-- **App:** install the new APK over the old one (releases share one signing key). On next start, it refreshes
-  `Download/FFXII_companion/install`.
-- **Game script:** after updating the app, run `install.cmd` again in the container. The app's Details panel shows the
-  running script's version.
+- **App and game script:** install the new APK over the old one (releases share one signing key), open the app once,
+  then restart the game. From 0.11.0 the game script updates itself: the loader checks the new script's signature at
+  the next game start and runs it. The app's Details panel shows the running script's version.
+- **Coming from 0.10.0 or older:** run `install.cmd` in the container **one last time** to install the loader.
+- **The loader itself:** only if a release note says so (rare), run `install.cmd` again.
 - **Data pack:** only needed again if a release note says so, or after changing the optional text mods.
+
+If the app ever says "The game reports: …", the loader refused to run the game script and the message says what to do.
+Usually it's "open this app once, then restart the game".
 
 ## Removing everything
 
-1. Container: run `D:\FFXII_companion\install\uninstall.cmd`. It deletes only `A:\x64\scripts\ThorCompanion.lua`.
+1. Container: run `D:\FFXII_companion\install\uninstall.cmd`. It deletes `A:\x64\scripts\ThorCompanion.lua` and the
+   loader's record folder `A:\x64\scripts\ThorCompanion-state`.
 2. Uninstall the **FFXII Companion** app.
 3. Delete `Download/FFXII_companion`.
 
