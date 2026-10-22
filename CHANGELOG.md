@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased (0.13.0)
+## 0.13.0-beta
 - **Targeting card.** When your party is about to act on an enemy, the Status page shows it: name (from your data
   pack's bestiary), level, HP, and what it's weak to, absorbs or is immune to, live from the game, so gear and effects
   count. It says who's targeting it, and tapping it opens that enemy's bestiary page. This is the target of the action

@@ -9,7 +9,7 @@
 --Protocol: docs/PROTOCOL.md. History: CHANGELOG.md.
 
 local PROTOCOL = 1
-local PRODUCER = { name = "ThorCompanion-lua", version = "0.12.0-beta" }
+local PRODUCER = { name = "ThorCompanion-lua", version = "0.13.0-beta" }
 
 --Under GameNative on the AYN Thor, Wine drive D: is /sdcard/Download, so this is Download/FFXII_companion on the device.
 local BASE_DIR = "D:/FFXII_companion/"
