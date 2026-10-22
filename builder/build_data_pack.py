@@ -25,7 +25,7 @@ from pathlib import Path
 sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-BUILDER_VERSION = '0.11.0-beta'
+BUILDER_VERSION = '0.12.0-beta'
 GAME_FOLDER = 'FINAL FANTASY XII THE ZODIAC AGE'
 
 
