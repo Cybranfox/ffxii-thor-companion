@@ -17,9 +17,9 @@ import java.util.Map;
  *
  * Exit labels (0.12.0, optional "exits" per region, built by the data builder from menu_mapname.bin): the game draws
  * each label at the exit's second point and only dims it while the route is locked, so labels are no spoiler. The
- * companion still shows a label only next to explored ground: an exit's point usually lies off the area's ink, at the
- * end of a short line, so each exit belongs to the area whose sheet is nearest, and its label shows when that area is
- * drawn.
+ * companion still shows a label only next to explored ground: a label shows when the area its exit belongs to is drawn.
+ * That area is the one whose line out (a link from an area to itself) clearly ends at the exit (97 of the game's 111
+ * exits), otherwise the area whose sheet is nearest.
  */
 final class Regions {
     static final String FORMAT = "ffxii-companion-regions-1";
@@ -218,10 +218,24 @@ final class Regions {
         // A link from an area to itself is the line out to one of its exits (all 99 in the game end at an exit point).
         for (Link l : reg.links) if (shownMaps.contains(l.a) && shownMaps.contains(l.b)) v.links.add(l);
         for (Exit e : reg.exits) {
-            Integer owner = nearestMap(reg.sheets, atlas, e.x, e.y);
+            Integer owner = lineOwner(reg.links, e.x, e.y);
+            if (owner == null) owner = nearestMap(reg.sheets, atlas, e.x, e.y);
             if (owner != null && shownMaps.contains(owner)) v.exits.add(e);
         }
         return v;
+    }
+
+    /** The area whose exit line ends within 30 units of (x, y), when no other exit line ends even half as close. */
+    static Integer lineOwner(List<Link> links, int x, int y) {
+        double best = Double.MAX_VALUE, second = Double.MAX_VALUE;
+        Integer owner = null;
+        for (Link l : links) {
+            if (l.a != l.b) continue;
+            double d = Math.min(Math.hypot(l.ax - x, l.ay - y), Math.hypot(l.bx - x, l.by - y));
+            if (d < best) { second = best; best = d; owner = l.a; }
+            else if (d < second) second = d;
+        }
+        return best <= 30 && second > 2 * best ? owner : null;
     }
 
     /** The map ID whose sheet rectangle (layout units) is nearest to point (x, y); null when no sheet is in the atlas. */

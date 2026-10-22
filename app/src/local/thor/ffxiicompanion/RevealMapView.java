@@ -24,7 +24,8 @@ import java.util.Map;
  * leaks. Layout as in the game's region view: sheet pixel (px, py) of a part sits at layout (x + px/4, y + py/4).
  * Colours are the companion's own (the game's tint is not recovered). The "you are here" marker (Position) is drawn
  * on the current area at sheet px (px, py): solid when the feed is live, hollow when it is only the last known spot.
- * Exit labels (0.12.0) are drawn centred on their anchor, skipping any that would overlap one already drawn.
+ * Exit labels (0.12.0) are drawn centred on their anchor; one that would overlap a label already drawn moves a line
+ * down or up, and is left out only when there is no room.
  *
  * Two uses:
  * - the Status card (not interactive): centred on the current area with a margin, so neighbours show at its edges;
@@ -39,6 +40,8 @@ final class RevealMapView extends View {
     /** Full map: margin around the explored region. */
     static final float REGION_MARGIN = 0.06f;
     static final float MIN_ZOOM = 1f, MAX_ZOOM = 8f;
+    /** Where a clashing label may move, in lines from its anchor. */
+    static final float[] LABEL_SHIFTS = { 0f, 1.1f, -1.1f, 2.2f, -2.2f };
 
     interface OnMoved { void moved(boolean moved); }
 
@@ -190,6 +193,13 @@ final class RevealMapView extends View {
         if (focus == null) return;
         float[] b = Regions.bounds(parts, !interactive || areaFit);
         if (b == null) return;
+        if (interactive && !areaFit) {
+            // exits sit off the explored ground, at the end of their lines: fit them and their labels too
+            for (Regions.Exit e : exits) {
+                b[0] = Math.min(b[0], Math.min(e.x, e.lx)); b[1] = Math.min(b[1], Math.min(e.y, e.ly));
+                b[2] = Math.max(b[2], Math.max(e.x, e.lx)); b[3] = Math.max(b[3], Math.max(e.y, e.ly));
+            }
+        }
         float m = interactive ? Math.max(b[2] - b[0], b[3] - b[1]) * (areaFit ? MARGIN / 2 : REGION_MARGIN)
                 : Math.max(b[2] - b[0], b[3] - b[1]) * MARGIN;
         float vx0 = b[0] - m, vy0 = b[1] - m, vx1 = b[2] + m, vy1 = b[3] + m;
@@ -223,14 +233,20 @@ final class RevealMapView extends View {
             if (cx < 0 || cy < 0 || cx > getWidth() || cy > getHeight()) continue;   // its exit is off screen
             // keep the whole label on screen
             cx = Math.max(w / 2 + pad, Math.min(getWidth() - w / 2 - pad, cx));
-            cy = Math.max(-fm.ascent + pad, Math.min(getHeight() - fm.descent - pad, cy - (fm.ascent + fm.descent) / 2));
-            RectF box = new RectF(cx - w / 2 - pad, cy + fm.ascent - pad, cx + w / 2 + pad, cy + fm.descent + pad);
-            boolean clash = false;
-            for (RectF t : taken) if (RectF.intersects(t, box)) { clash = true; break; }
-            if (clash) continue;
-            taken.add(box);
-            canvas.drawText(e.text, cx, cy, labelHalo);
-            canvas.drawText(e.text, cx, cy, label);
+            float line = fm.descent - fm.ascent;
+            float base = cy - (fm.ascent + fm.descent) / 2;
+            // on a clash with a label already drawn, try a line below, then above, before leaving it out
+            for (float shift : LABEL_SHIFTS) {
+                float y = Math.max(-fm.ascent + pad, Math.min(getHeight() - fm.descent - pad, base + shift * line));
+                RectF box = new RectF(cx - w / 2 - pad, y + fm.ascent - pad, cx + w / 2 + pad, y + fm.descent + pad);
+                boolean clash = false;
+                for (RectF t : taken) if (RectF.intersects(t, box)) { clash = true; break; }
+                if (clash) continue;
+                taken.add(box);
+                canvas.drawText(e.text, cx, y, labelHalo);
+                canvas.drawText(e.text, cx, y, label);
+                break;
+            }
         }
     }
 

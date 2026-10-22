@@ -127,6 +127,13 @@ public final class RevealTest {
             check(Regions.nearestMap(regions.regionOf("578_synthetic_0.png").sheets, atlas, 560, 500) == 578
                     && Regions.nearestMap(regions.regionOf("578_synthetic_0.png").sheets, atlas, 100, 60) == 588,
                     "an exit belongs to the nearest sheet");
+            java.util.List<Regions.Link> lines = java.util.Arrays.asList(new Regions.Link(585, 585, 348, 188, 348, 140),
+                    new Regions.Link(578, 578, 500, 300, 520, 300), new Regions.Link(581, 581, 10, 10, 11, 11),
+                    new Regions.Link(585, 581, 348, 120, 348, 120));
+            check(Regions.lineOwner(lines, 350, 125) == 585, "exit at the end of 585's line belongs to 585");
+            check(Regions.lineOwner(lines, 348, 300) == null, "no line within 30 units: fall back");
+            check(Regions.lineOwner(java.util.Arrays.asList(new Regions.Link(1, 1, 0, 0, 0, 10), new Regions.Link(2, 2, 20, 0, 20, 10)),
+                    10, 5) == null, "two lines equally close: fall back");
             Regions.Part p = new Regions.Part();
             p.x = 100; p.y = 200;
             p.visible = new boolean[4][4];
