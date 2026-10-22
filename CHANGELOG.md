@@ -7,6 +7,9 @@
   LT/RT does: changes which set is active and rebuilds the AI list from it. Nothing else is touched.
 - **Title screen:** Status says "Title screen" instead of "Map 12", and the party card waits for a save instead of
   showing leftover numbers.
+- **Data builder: 401 more area names.** The builder misread the area-name table's header and stopped after the
+  first 648 entries, so many places showed as "Map 1234". It now reads all 707 named areas. **Re-run the data
+  builder once** and copy the new `FFXII_companion` folder to the Thor.
 - **Update hint:** if the game is still running an older game script than this app's, Status says so and points to
   `install.cmd`.
 - Game script 0.10.0-beta: publishes each member's active set and adds the `setactive` editor operation (count 0 →

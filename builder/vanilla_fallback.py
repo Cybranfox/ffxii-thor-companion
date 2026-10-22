@@ -112,13 +112,17 @@ def build(install=DEFAULT, lang='us'):
             'names':{k:v for k,v in names.items() if v},'boards':boards}
         raw = read(f'ps2data/image/ff12/{lang}/bin/planmapname.bin')
         assert raw[:4] == b'PLMN'
-        end = struct.unpack_from('<I',raw,4)[0]
-        assert 16 <= end <= len(raw) and end % 2 == 0
+        # Header: +4 map count, +8 region count, +0xC total; u16 string offsets for every slot from +0x10, maps first
+        # (Party_Target_Export_2026-10-22, Part C). Before 0.10.0 the map count was misread as the table's byte end,
+        # which kept only the first 648 slots and lost 401 named areas.
+        maps, regions, total = struct.unpack_from('<3I', raw, 4)
+        table_end = 16 + 2 * total
+        assert maps + regions == total and table_end <= len(raw)
         areas = {}
         area_unknown = 0
-        for i,off in enumerate(struct.unpack_from(f'<{(end-16)//2}H',raw,16)):
+        for i,off in enumerate(struct.unpack_from(f'<{maps}H',raw,16)):
             if not off: continue
-            assert end <= off < len(raw)
+            assert table_end <= off < len(raw)
             z = raw.index(0,off)
             name=''
             for c in raw[off:z]:
