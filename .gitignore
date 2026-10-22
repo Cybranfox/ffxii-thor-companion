@@ -1,0 +1,18 @@
+# build output
+app/build/
+app/tests/classes/
+app/tests/out/
+dist/
+__pycache__/
+*.pyc
+builder/.venv/
+builder/output/
+# never commit: signing keys, game data, saves, personal logs
+*.jks
+*.keystore
+release.env
+FFXII_companion/
+*.bin
+*.vbf
+hook*.log
+local.env
