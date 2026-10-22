@@ -55,6 +55,10 @@ final class Gambits {
         final int id;
         final String name;
         final List<Slot> slots;     // non-empty slots only, in menu order (set I, II, III)
+        /** 0.10.0: the set the game uses now (0..2), or -1 when the game script doesn't publish it. */
+        int active = -1;
+        /** 0.10.0: the member's three stored sets as read (0x9C bytes, hex): the expected value for a set switch. */
+        String storedHex;
         Member(int id, String name, List<Slot> slots) { this.id = id; this.name = name; this.slots = slots; }
     }
 
@@ -66,6 +70,9 @@ final class Gambits {
         if (sets == null) return null;
         String[] parts = sets.split(",");
         if (parts.length != MEMBERS.length) return null;
+        String act = Json.str(g, "active");
+        String[] actives = act != null ? act.split(",") : null;
+        if (actives != null && actives.length != MEMBERS.length) actives = null;
         List<Member> out = new ArrayList<>();
         for (int m = 0; m < parts.length; m++) {
             byte[] raw = hex(parts[m]);
@@ -80,7 +87,17 @@ final class Gambits {
                     slots.add(new Slot(k * SLOTS + i + 1, c, a, (bits >> i & 1) != 0, bits));
                 }
             }
-            out.add(new Member(m, MEMBERS[m], Collections.unmodifiableList(slots)));
+            Member mem = new Member(m, MEMBERS[m], Collections.unmodifiableList(slots));
+            mem.storedHex = parts[m].toLowerCase(java.util.Locale.ROOT);
+            if (actives != null) {
+                try {
+                    int a = Integer.parseInt(actives[m].trim());
+                    if (a >= 0 && a <= 2) mem.active = a;
+                } catch (NumberFormatException ignored) {
+                    // unknown: no set switching for this member
+                }
+            }
+            out.add(mem);
         }
         return out;
     }

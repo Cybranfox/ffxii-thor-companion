@@ -45,6 +45,9 @@ final class GambitsView extends LinearLayout {
     private String sentId, sentWhat, editError;
     /** 0 = slot list, 1 = choosing a condition, 2 = choosing an action (the list area shows the choices). */
     private int pickMode;
+    /** 0.10.0: a set switch waiting for its confirm tap (member + target set), or null. */
+    private Gambits.Member switchMember;
+    private int switchTarget = -1;
     /** The opt-in switch for the editor: the ARMED file in cmd/, read by the game script at game start. */
     private final LinearLayout armRow;
     private final TextView armText, armButton, armConfirm;
@@ -116,7 +119,7 @@ final class GambitsView extends LinearLayout {
             GambitEdit.Proposal p = proposal;
             if (p != null && sentId == null && (p.confirmToggle || p.change)) {   // Back: to the choice step, nothing sent
                 p.confirmToggle = false; p.change = false; p.newCondition = p.condition; p.newAction = p.action;
-            } else { proposal = null; sentId = null; }
+            } else { proposal = null; sentId = null; switchMember = null; switchTarget = -1; }
             editError = null;
             setPick(0);
         });
@@ -203,6 +206,8 @@ final class GambitsView extends LinearLayout {
     private void propose(Gambits.Member m, Gambits.Slot s) {
         if (!editAllowed || sentId != null || !GambitEdit.editable(m, s)) return;
         proposal = new GambitEdit.Proposal(m, s);
+        switchMember = null;
+        switchTarget = -1;
         editError = null;
         setPick(0);
     }
@@ -221,7 +226,37 @@ final class GambitsView extends LinearLayout {
         setPick(0);
     }
 
+    private void proposeSwitch(Gambits.Member m, int target) {
+        if (!editAllowed || sentId != null || !GambitEdit.canSwitch(m, target)) return;
+        proposal = null;
+        switchMember = m;
+        switchTarget = target;
+        editError = null;
+        setPick(0);
+    }
+
+    private void sendSwitch() {
+        Gambits.Member m = switchMember;
+        int target = switchTarget;
+        if (m == null || !editAllowed || sentId != null || cmdDir == null || !GambitEdit.canSwitch(m, target)) return;
+        long now = System.currentTimeMillis() / 1000;
+        String id = GambitEdit.newId(now);
+        try {
+            if (!GambitEdit.write(cmdDir, GambitEdit.setActiveText(m, target, id, now))) { editError = "An earlier request is still waiting for the game."; updateBar(); return; }
+        } catch (java.io.IOException e) {
+            editError = "Could not write the request: " + e.getMessage();
+            updateBar();
+            return;
+        }
+        sentId = id;
+        sentWhat = m.name + " · use " + GambitEdit.setName(target);
+        switchMember = null;
+        switchTarget = -1;
+        setPick(0);
+    }
+
     private void send() {
+        if (switchMember != null && proposal == null) { sendSwitch(); return; }
         GambitEdit.Proposal p = proposal;
         if (p == null || !editAllowed || sentId != null || cmdDir == null) return;
         if (!p.sendable()) return;   // two taps minimum: choose, then send
@@ -251,6 +286,20 @@ final class GambitsView extends LinearLayout {
             editCancel.setText(out != null ? "OK" : "Hide");
             editBar.setVisibility(VISIBLE);
             if (out != null) lastKey = null;
+            return;
+        }
+        if (proposal == null && switchMember != null) {
+            editMsg.setText(switchMember.name + ": use " + GambitEdit.setName(switchTarget) + " instead of "
+                    + GambitEdit.setName(switchMember.active) + "\nTakes effect straight away. Only in the field with the game's"
+                    + " menu closed; the game checks it first." + (editError != null ? "\n" + editError : ""));
+            editSend.setText("Switch set in game");
+            editSend.setAlpha(1f);
+            editSend.setVisibility(VISIBLE);
+            editToggle.setVisibility(GONE);
+            editChange.setVisibility(GONE);
+            pickRow.setVisibility(GONE);
+            editCancel.setText("Cancel");
+            editBar.setVisibility(VISIBLE);
             return;
         }
         if (proposal == null) {
@@ -359,9 +408,7 @@ final class GambitsView extends LinearLayout {
             int thisSet = (s.index - 1) / Gambits.SLOTS;
             if (thisSet != set) {
                 set = thisSet;
-                TextView h = tv("Set " + (set == 0 ? "I" : set == 1 ? "II" : "III"), 11, accent, true);
-                h.setPadding(dp(4), dp(8), 0, dp(2));
-                rows.addView(h);
+                rows.addView(setHeader(m, set));
             }
             LinearLayout r = row(s);
             if (editAllowed && GambitEdit.editable(m, s)) {
@@ -658,7 +705,32 @@ final class GambitsView extends LinearLayout {
 
     private static int signature(List<Gambits.Member> ms) {
         int h = 1;
-        for (Gambits.Member m : ms) for (Gambits.Slot s : m.slots) h = 31 * h + (s.index * 7 + s.condition * 13 + s.action * 17 + (s.on ? 1 : 0));
+        for (Gambits.Member m : ms) {
+            h = 31 * h + m.active;   // 0.10.0: a set switch redraws the headers
+            for (Gambits.Slot s : m.slots) h = 31 * h + (s.index * 7 + s.condition * 13 + s.action * 17 + (s.on ? 1 : 0));
+        }
+        return h;
+    }
+
+    /** "Set II", marked "· in use" when the game uses it; with the editor on, other sets offer "Use this set…". */
+    private android.view.View setHeader(Gambits.Member m, int set) {
+        LinearLayout h = new LinearLayout(getContext());
+        h.setGravity(android.view.Gravity.CENTER_VERTICAL);
+        h.setPadding(dp(4), dp(8), 0, dp(2));
+        h.addView(tv(GambitEdit.setName(set), 11, accent, true));
+        if (m.active == set) {
+            TextView u = tv("  · in use", 11, good, true);
+            h.addView(u);
+        } else if (editAllowed && GambitEdit.canSwitch(m, set)) {
+            TextView b = button("Use this set…", card, text);
+            b.setTextSize(11);
+            b.setPadding(dp(10), dp(2), dp(10), dp(2));
+            final int target = set;
+            b.setOnClickListener(v -> proposeSwitch(m, target));
+            LayoutParams bl = new LayoutParams(-2, -2);
+            bl.leftMargin = dp(10);
+            h.addView(b, bl);
+        }
         return h;
     }
 

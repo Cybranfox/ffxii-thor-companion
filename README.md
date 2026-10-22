@@ -12,7 +12,7 @@ the game in real time.
 | Tab | What you get |
 |---|---|
 | **Status** | Where you are, a map of the areas you have explored with a "you are here" marker, and live party HP/MP. |
-| **Gambits** | Every member's gambits as the game has them right now, with item counts ("Potion ×14", "0 left" warnings). **Suggest** builds a gambit set from what that character owns and is licensed for. The optional **editor** can apply a change or a whole suggested set to the running game. |
+| **Gambits** | Every member's gambits as the game has them right now, with item counts ("Potion ×14", "0 left" warnings). **Suggest** builds a gambit set from what that character owns and is licensed for. The optional **editor** can apply a change or a whole suggested set to the running game, and switch which set (I/II/III) a character uses. |
 | **Equip** | Each member's equipped gear, plus what the game's own **Optimize** would change. Descriptions come from optional mods. |
 | **Bestiary** | Bestiary pages by location (with an optional mod). |
 | **Licenses** | Both job boards per character: owned, buyable now (the game's exact rules, including Espers, Quickenings and the Second Board), and the cheapest route to any license. |

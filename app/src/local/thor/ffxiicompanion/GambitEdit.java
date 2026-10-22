@@ -74,6 +74,30 @@ final class GambitEdit {
                 + (p.change ? String.format("newCond=%04x\nnewAction=%04x\n", p.newCondition, p.newAction) : "");
     }
 
+    /**
+     * 0.10.0: switch member m's active set to target (game script op setactive). Carries what the companion saw (the
+     * current active set and all three stored sets) so the game script can refuse if anything changed meanwhile.
+     */
+    static String setActiveText(Gambits.Member m, int target, String id, long issuedSec) {
+        return CMD_CONTRACT + "\n"
+                + "id=" + id + "\n"
+                + "issued=" + issuedSec + "\n"
+                + "member=" + m.id + "\n"
+                + "set=" + target + "\n"
+                + "op=setactive\n"
+                + "from=" + m.active + "\n"
+                + "stored=" + m.storedHex + "\n";
+    }
+
+    /** A set switch can be offered: verified member, active set known, stored bytes known, a different set. */
+    static boolean canSwitch(Gambits.Member m, int target) {
+        return m != null && m.id >= 0 && m.id < Gambits.MEMBER_VERIFIED.length && Gambits.MEMBER_VERIFIED[m.id]
+                && m.active >= 0 && m.storedHex != null && m.storedHex.length() == Gambits.MEMBER_BYTES * 2
+                && target >= 0 && target <= 2 && target != m.active;
+    }
+
+    static String setName(int k) { return "Set " + (k == 0 ? "I" : k == 1 ? "II" : "III"); }
+
     /** IDs the game script accepts (ThorCompanion.lua validAction; condition table of 256). */
     static boolean validCondition(int c) { return c >= 0x6000 && c < 0x6100; }
 
@@ -216,6 +240,9 @@ final class GambitEdit {
             case "manifesto_36_slot_on_or_unknown": return "Manifesto '36 Gambits & 1 Set' is on or unreadable";
             case "save_not_ready": return "no save loaded";
             case "busy": return "another change is in progress";
+            case "gambits_menu_open": return "the game's Gambits menu is open — close it first";
+            case "condition_table_unavailable": return "the game's gambit table isn't readable right now";
+            case "slot_locked": return "that set uses a slot the character hasn't unlocked";
             default: return r.replace('_', ' ');
         }
     }

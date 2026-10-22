@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.10.0-beta
+- **Switch gambit sets from the companion.** With the editor on, each set's heading shows "· in use" or a **Use this
+  set…** button. The switch happens straight away in the field and is checked by the game first. It's refused while
+  the game's Gambits menu is open, or if anything changed since the companion last read it. It does what the game's own
+  LT/RT does: changes which set is active and rebuilds the AI list from it. Nothing else is touched.
+- **Title screen:** Status says "Title screen" instead of "Map 12", and the party card waits for a save instead of
+  showing leftover numbers.
+- **Update hint:** if the game is still running an older game script than this app's, Status says so and points to
+  `install.cmd`.
+- Game script 0.10.0-beta: publishes each member's active set and adds the `setactive` editor operation (count 0 →
+  index → entries → count, read back, rolled back on any mismatch, re-checked 2.5 s later).
+
 ## 0.9.0-beta (first public beta)
 - **App:** five tabs.
   - Status: location, a map of explored areas with your position, and live party HP/MP.

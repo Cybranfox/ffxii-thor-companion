@@ -510,6 +510,108 @@ def main():
         assert w.slot(0, 0, int(f['slot']))[:2] == (int(f['newCond'], 16), int(f['newAction'], 16)) and w.replica_ok(0)
         ok += 1
         print('PASS setslot command built by the receiver (ApplyTest) applied by the Lua editor on the same real dump')
+    # ---- 0.10.0 setactive: switch a member's active gambit set (Action_IDs_and_Set_Switch_2026-10-22, Part B) ----
+    def setactive(w, m, target, cid, frm=None, stored=None, **over):
+        k = struct.unpack('<I', bytes(w.mem[SAVE + 0x7370 + 4 * m + i] for i in range(4)))[0]
+        f = dict(id=cid, issued=str(int(time.time())), member=m, set=target, op='setactive',
+                 **{'from': k if frm is None else frm},
+                 stored=(stored if stored is not None else bytes(w.mem.get(SETS + m * 0x9C + i, 0) for i in range(0x9C)).hex()))
+        f.update(over)
+        w.disk[CMD] = 'ffxii.gambitcmd.v1' + chr(10) + ''.join(f'{key}={v}' + chr(10) for key, v in f.items())
+    def active(w, m):
+        return struct.unpack('<I', bytes(w.mem[SAVE + 0x7370 + 4 * m + i] for i in range(4)))[0]
+    total += 6
+    w = World(pack, probe)
+    idx = [active(w, m) for m in range(6)]
+    assert w.snapshot()['data']['gambits']['active'] == ','.join(map(str, idx))
+    ok += 1
+    print('PASS active-set telemetry: data.gambits.active == the six active indices')
+
+    n = 0
+    for m in range(6):
+        for target in range(3):
+            if target == idx[m]:
+                continue
+            w = World(pack, probe)
+            before_sets = bytes(w.mem.get(SETS + m * 0x9C + i, 0) for i in range(0x9C))
+            others = [w.runtime_bytes(o) for o in range(6) if o != m]
+            setactive(w, m, target, f'test-sa-{m}-{target}')
+            w.tick(); w.flip(); w.tick()
+            r = w.last()
+            assert r['status'] == 'applied' and active(w, m) == target and w.replica_ok(m), (m, target, r)
+            assert bytes(w.mem.get(SETS + m * 0x9C + i, 0) for i in range(0x9C)) == before_sets
+            assert [w.runtime_bytes(o) for o in range(6) if o != m] == others
+            rt, kaddr = RT + m * 0x170, SAVE + 0x7370 + 4 * m
+            seq = [(a, wd) for a, wd, _ in w.writes]
+            assert seq[0] == (rt, 1) and w.writes[0][2] == 0, 'count 0 first'
+            assert seq[1] == (kaddr, 4), 'index second'
+            assert seq[-1] == (rt, 1), 'final count last'
+            assert all(rt <= a < rt + 0x170 or a == kaddr for a, _ in seq), 'nothing else written'
+            w.tick(3000)
+            assert w.last()['persisted'] is True
+            n += 1
+    ok += 1
+    print(f'PASS setactive: {n} member/set switches applied; count 0 -> index -> entries -> count; stored sets and other members untouched; persisted')
+
+    cases = [(dict(field=False), {}, 'not_in_field'),
+             (dict(thirty_six=True), {}, 'manifesto_36_slot_on_or_unknown'),
+             (dict(table=False), {}, 'condition_table_unavailable'),
+             ({}, dict(frm='bad'), 'stale_expected'),
+             ({}, dict(stored='00' * 0x9C), 'stale_expected'),
+             ({}, dict(menu=True), 'gambits_menu_open'),
+             ({}, dict(rtmismatch=True), 'runtime_mismatch')]
+    for kw, over, reason in cases:
+        w = World(pack, probe)
+        if over.pop('menu', False):
+            put(w.mem, 0x2CA96F8, (0x12345678).to_bytes(8, 'little'))
+        if over.pop('rtmismatch', False):
+            w.mem[RT + 0x20 + 0x24] ^= 1
+        if kw:
+            w = World(pack, probe, **kw)
+        frm = over.pop('frm', None)
+        tgt = (idx[0] + 1) % 3
+        setactive(w, 0, tgt, 'test-sa-gate-' + reason.replace('_', '-')[:16],
+                  frm=((idx[0] + 2) % 3 if frm == 'bad' else None), **over)
+        w.tick(); w.flip(); w.tick()
+        assert w.writes == [] and w.last()['status'] == 'rejected' and w.last()['reason'] == reason, (reason, w.last())
+        assert active(w, 0) == idx[0]
+    ok += 1
+    print(f'PASS setactive gates, zero writes each: {", ".join(c[2] for c in cases)}')
+
+    w = World(pack, probe)
+    setactive(w, 0, idx[0], 'test-sa-noop')
+    w.tick(); w.flip(); w.tick()
+    assert w.writes == [] and w.last()['status'] == 'applied' and w.last()['reason'] == 'already_active'
+    ok += 1
+    print('PASS setactive to the already-active set: success, zero writes')
+
+    tgt = (idx[0] + 1) % 3
+    w = World(pack, probe, drop={SAVE + 0x7370})
+    before = w.runtime_bytes(0)
+    setactive(w, 0, tgt, 'test-sa-dropped')
+    w.tick(); w.flip(); w.tick()
+    assert w.last()['status'] == 'restored' and active(w, 0) == idx[0] and w.runtime_bytes(0) == before, w.last()
+    ok += 1
+    print('PASS setactive index write lost -> old count, entries and index put back exactly (restored)')
+
+    w = World(pack, probe)
+    setactive(w, 0, tgt, 'test-sa-late-change')
+    w.tick(); w.flip(); w.tick()
+    assert w.last()['status'] == 'applied'
+    put(w.mem, SAVE + 0x7370, idx[0].to_bytes(4, 'little'))   # the player switches back in the menu
+    w.tick(3000)
+    assert w.last()['persisted'] is False
+    ok += 1
+    print('PASS setactive persistence re-reads the index: a later native switch is reported, not overwritten')
+    jf = Path(__file__).resolve().parents[2] / 'app/tests/out/java_setactive_cmd.txt'
+    if jf.is_file():                                   # the app's command uses exactly the fields this script reads
+        lines = jf.read_text(encoding='ascii').splitlines()
+        assert lines[0] == 'ffxii.gambitcmd.v1'
+        assert [x.split('=', 1)[0] for x in lines[1:]] == ['id', 'issued', 'member', 'set', 'op', 'from', 'stored']
+        assert dict(x.split('=', 1) for x in lines[1:])['op'] == 'setactive'
+        total += 1
+        ok += 1
+        print('PASS the app setactive command (SetActiveTest) has exactly the fields the game script parses')
     print(f'{ok}/{total} PASS. Real Thor dump + deployed battle pack; stubs only; every write recorded and checked.')
 
 

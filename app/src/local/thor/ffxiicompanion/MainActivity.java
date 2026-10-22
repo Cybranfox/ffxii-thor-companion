@@ -557,8 +557,11 @@ public class MainActivity extends Activity {
             case STALE:
                 setStatus("Paused", WARN, "No update for " + secs(v.transportAgeMs) + " (paused, loading or closed)." + bad);
                 break;
-            default:
-                setStatus("Live", GOOD, bad.trim());
+            default: {
+                Map<String, Object> hello = v.current != null ? v.current.hello() : null;
+                String hint = Place.updateHint(hello != null ? Json.str(Json.obj(hello, "producer"), "version") : null, appVersion());
+                setStatus("Live", GOOD, ((hint != null ? hint + " " : "") + bad).trim());
+            }
         }
 
         showParty(v);
@@ -581,9 +584,22 @@ public class MainActivity extends Activity {
         showCaps(hello);
     }
 
+    String appVersion() {
+        try {
+            return getPackageManager().getPackageInfo(getPackageName(), 0).versionName;
+        } catch (android.content.pm.PackageManager.NameNotFoundException e) {
+            return null;
+        }
+    }
+
     void showParty(ReceiverState.View v) {
         setChip(partyChip, v.partyFamily);
         partyRow.removeAllViews();
+        if (v.location != null && Place.title(Json.lng(v.location.map(), "mapId"))) {   // 0.10.0: no party before a save loads
+            partyNote.setText("Load a save to see your party.");
+            partyNote.setVisibility(View.VISIBLE);
+            return;
+        }
         if (v.party == null) {
             partyNote.setText(partyReason(v.partyFamily));
             partyNote.setVisibility(View.VISIBLE);

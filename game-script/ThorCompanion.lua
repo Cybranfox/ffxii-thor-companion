@@ -7,7 +7,7 @@
 --Protocol: docs/PROTOCOL.md. History: CHANGELOG.md.
 
 local PROTOCOL = 1
-local PRODUCER = { name = "ThorCompanion-lua", version = "0.9.0-beta" }
+local PRODUCER = { name = "ThorCompanion-lua", version = "0.10.0-beta" }
 
 --Under GameNative on the AYN Thor, Wine drive D: is /sdcard/Download, so this is Download/FFXII_companion on the device.
 local BASE_DIR = "D:/FFXII_companion/"
@@ -464,6 +464,13 @@ local function readGambitSets()
   return table.concat(out, ",")
 end
 
+--0.10.0: each member's active set index (u32 at P + 0x7370 + m*4, 0..2), "k,k,k,k,k,k".
+local function readActiveSets()
+  local out = {}
+  for m = 0, GAMBIT_MEMBERS - 1 do out[#out + 1] = tostring(memory.u32[GAMBIT_BASE + 0x7370 + m * 4]) end
+  return table.concat(out, ",")
+end
+
 --Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
 local function gambitState()
   local now = safeCall(event.getClock) or 0
@@ -478,10 +485,12 @@ local function gambitState()
     elseif ptr ~= GAMBIT_BASE then r.status = "save_not_ready"
     else
       local ok1, a = pcall(readGambitSets)
+      local okA, act1 = pcall(readActiveSets)
       local ok2, b = pcall(readGambitSets)
-      if not ok1 or not ok2 then r.status = "read_failed"
-      elseif a ~= b then r.status = "unstable"
-      else r.status = "ok"; r.sets = a; r.stable = true; r.observedClockUs = now end
+      local okB, act2 = pcall(readActiveSets)
+      if not ok1 or not ok2 or not okA or not okB then r.status = "read_failed"
+      elseif a ~= b or act1 ~= act2 then r.status = "unstable"
+      else r.status = "ok"; r.sets = a; r.active = act1; r.stable = true; r.observedClockUs = now end
     end
   end
   gambits = r
@@ -719,8 +728,16 @@ local function parseCommand(text)
   local function hx(s) return s and s:match("^%x%x%x%x$") and tonumber(s, 16) or nil end
   local cmd = { id = c.id, op = c.op, issued = dec(c.issued, 0, 1 << 40), member = dec(c.member, 0, GAMBIT_MEMBERS - 1),
                 set = dec(c.set, 0, 2), slot = dec(c.slot, 0, 11), cond = hx(c.cond), action = hx(c.action),
-                bits = hx(c.bits), newCond = hx(c.newCond), newAction = hx(c.newAction) }
+                bits = hx(c.bits), newCond = hx(c.newCond), newAction = hx(c.newAction),
+                from = dec(c.from, 0, 2), stored = c.stored and c.stored:lower() }
   if not (cmd.id and cmd.id:match("^[%w%-]+$") and #cmd.id >= 8 and #cmd.id <= 40) then return nil, "bad_id" end
+  if cmd.op == "setactive" then   --0.10.0: switch the member's active set (Action_IDs_and_Set_Switch_2026-10-22, Part B)
+    for _, k in ipairs({ "issued", "member", "set", "from" }) do
+      if cmd[k] == nil then return nil, "missing_" .. k, cmd end
+    end
+    if not (cmd.stored and #cmd.stored == GAMBIT_STRIDE * 2 and cmd.stored:match("^%x+$")) then return nil, "missing_stored", cmd end
+    return cmd
+  end
   if cmd.op ~= "enable" and cmd.op ~= "disable" and cmd.op ~= "set" and cmd.op ~= "setslot" then return nil, "bad_op", cmd end
   for _, k in ipairs({ "issued", "member", "set", "slot", "cond", "action", "bits" }) do
     if cmd[k] == nil then return nil, "missing_" .. k, cmd end
@@ -817,6 +834,48 @@ local function planEdit(cmd)
   return { cmd = cmd, active = active, old = cur, new = new }
 end
 
+--0.10.0 setactive (Action_IDs_and_Set_Switch_2026-10-22, Part B). The game's LT/RT in the Gambits menu writes only the
+--active index; leaving the menu rebuilds the runtime list from the now-active stored set (0x328140, same payload as
+--0x327DE0). From the field this does the same: index + runtime rebuild, nothing else. The Gambits menu must be closed
+--(its panels cache the sets and would overwrite the change), the live condition table must be readable, and the stored
+--sets, the active index and the runtime list must all be exactly what the companion saw and the model expects.
+local GAMBIT_MENU_PANELS = { 0x2CA96E0, 0x2CA96E8, 0x2CA96F0, 0x2CA96F8, 0x2CA9700, 0x2CA9708 }
+
+local function storedHex(m)
+  local a, out = GAMBIT_BASE + GAMBIT_SETS + m * GAMBIT_STRIDE, {}
+  for i = 0, GAMBIT_STRIDE - 1 do out[#out + 1] = string.format("%02x", memory.u8[a + i]) end
+  return table.concat(out)
+end
+
+local function planSetActive(cmd)
+  if not supportedBuild() then return nil, "unsupported_build" end
+  if memory.u64[GAMBIT_SAVE_PTR] ~= GAMBIT_BASE then return nil, "save_not_ready" end
+  if manifestoSingleList() ~= false then return nil, "manifesto_36_slot_on_or_unknown" end
+  if memory.u32[MAP_FLAGS] & 1 ~= 1 then return nil, "not_in_field" end
+  for _, a in ipairs(GAMBIT_MENU_PANELS) do
+    if memory.u64[a] ~= 0 then return nil, "gambits_menu_open" end
+  end
+  local t = condTable()
+  if not t or t.source ~= "live" then return nil, "condition_table_unavailable", { table = condDiag } end
+  local m, target = cmd.member, cmd.set
+  local active = memory.u32[GAMBIT_BASE + SET_INDEX + m * 4]
+  if active > 2 then return nil, "bad_active_set" end
+  if active ~= cmd.from or storedHex(m) ~= cmd.stored then return nil, "stale_expected" end
+  if target == active then return { cmd = cmd, active = active, target = target, noop = true } end
+  local new = readSet(m, target)
+  local count = memory.u8[setAddr(m, target) + 0x32]
+  if count > 12 then return nil, "bad_slot_count" end
+  for i = 0, 11 do
+    if (new.bits >> i) & 1 == 1 and new.cond[i] ~= 0xFFFF and new.act[i] ~= 0xFFFF then
+      if i >= count then return nil, "slot_locked" end
+      if new.cond[i] < 0x6000 or new.cond[i] >= 0x6000 + t.count then return nil, "bad_condition" end
+      if not validAction(new.act[i]) then return nil, "bad_action" end
+    end
+  end
+  if not runtimeMatches(runtimeAddr(m), replicaEntries(readSet(m, active), t)) then return nil, "runtime_mismatch" end
+  return { cmd = cmd, active = active, target = target, entries = replicaEntries(new, t), stored = cmd.stored }
+end
+
 local function editResult(cmd, status, reason, extra)
   local r = { contract = EDIT_CONTRACT, id = cmd and cmd.id, op = cmd and cmd.op, member = cmd and cmd.member,
               set = cmd and cmd.set, slot = cmd and cmd.slot, status = status, reason = reason,
@@ -831,6 +890,46 @@ local function finishEdit(r, newSet)
   forceGambits = true
 end
 
+--Frame thread: count 0 first, then the index, then the entries, then the final count (the native rebuild leaves the
+--header and the bytes past the count alone, and so does this). Read back; on a mismatch put the old index, entries and
+--count back (count last) while still on this frame.
+local function applySetActive(p)
+  local ok, plan, why, extra = pcall(planSetActive, p.cmd)   --re-check every gate on this thread, right before writing
+  if not ok then finishEdit(editResult(p.cmd, "rejected", "check_failed")); return end
+  if not plan then finishEdit(editResult(p.cmd, "rejected", why, extra)); return end
+  local m, k = plan.cmd.member, GAMBIT_BASE + SET_INDEX + plan.cmd.member * 4
+  if plan.noop then finishEdit(editResult(plan.cmd, "applied", "already_active", { activeSet = plan.active, to = plan.target })); return end
+  local rt = runtimeAddr(m)
+  local savedRt = saveRuntime(rt)
+  local info = { activeSet = plan.active, to = plan.target, runtimeCountBefore = savedRt.count }
+  local wrote = pcall(function()
+    memory.u8[rt] = 0
+    memory.u32[k] = plan.target
+    for j = 0, #plan.entries - 1 do
+      for n, off in ipairs(RT_OFFS) do memory.u16[rt + j * RUNTIME_ENTRY + off] = plan.entries[j + 1][n] end
+    end
+    memory.u8[rt] = #plan.entries
+  end)
+  local good = wrote and pcall(function()
+    assert(memory.u32[k] == plan.target and runtimeMatches(rt, plan.entries) and storedHex(m) == plan.stored)
+  end)
+  info.runtimeCountAfter = memory.u8[rt]
+  if good then
+    finishEdit(editResult(plan.cmd, "applied", nil, info), { m = m, k = plan.target, active = plan.target, setactive = true,
+                                                              entries = plan.entries, stored = plan.stored })
+    return
+  end
+  local restored = pcall(function()
+    memory.u8[rt] = 0
+    memory.u32[k] = plan.active
+    for o, v in pairs(savedRt.words) do if memory.u16[rt + o] ~= v then memory.u16[rt + o] = v end end
+    memory.u8[rt] = savedRt.count
+    assert(memory.u32[k] == plan.active and sameRuntime(rt, savedRt))
+  end)
+  info.runtimeCountAfter = memory.u8[rt]
+  finishEdit(editResult(plan.cmd, restored and "restored" or "restore_failed", wrote and "readback_mismatch" or "write_failed", info))
+end
+
 --Runs on the game's frame thread, from the permanent sync onFlip hook (registered at load when armed).
 local function applyPendingEdit()
   local p = editPending
@@ -838,6 +937,7 @@ local function applyPendingEdit()
   if not p then return end
   local now = safeCall(event.getClock) or 0
   if now > p.deadline then finishEdit(editResult(p.cmd, "expired", "apply_late")); return end
+  if p.cmd.op == "setactive" then applySetActive(p); return end
   local ok, plan, why, extra = pcall(planEdit, p.cmd)     --re-check every gate on this thread, right before writing
   if not ok then finishEdit(editResult(p.cmd, "rejected", "check_failed")); return end
   if not plan then finishEdit(editResult(p.cmd, "rejected", why, extra)); return end
@@ -885,6 +985,11 @@ local function editTick()
      and now - (editLast.clockUs or now) >= PERSIST_CHECK_US then
     local ok, same = pcall(function()
       local n = editNewSet
+      if n.setactive then   --index, stored bytes and runtime list must all still be what was written
+        local t = condTable()
+        return memory.u32[GAMBIT_BASE + SET_INDEX + n.m * 4] == n.active and storedHex(n.m) == n.stored
+               and t ~= nil and t.source == "live" and runtimeMatches(runtimeAddr(n.m), n.entries)
+      end
       local live = readSet(n.m, n.k)
       if not sameSet(live, n.set) then return false end
       if n.k ~= n.active then return true end
@@ -913,7 +1018,7 @@ local function editTick()
   local age = os.time() - cmd.issued
   if age > CMD_MAX_AGE_S or age < -30 then finishEdit(editResult(cmd, "rejected", "command_too_old")); return end
   if editPending then finishEdit(editResult(cmd, "rejected", "busy")); return end
-  local ok, plan, reason, extra = pcall(planEdit, cmd)
+  local ok, plan, reason, extra = pcall(cmd.op == "setactive" and planSetActive or planEdit, cmd)
   if not ok then finishEdit(editResult(cmd, "rejected", "check_failed")); return end
   if not plan then finishEdit(editResult(cmd, "rejected", reason, extra)); return end
   editPending = { cmd = cmd, deadline = now + APPLY_TIMEOUT_US }   --the load-time frame hook applies it (no registration here)
@@ -1262,6 +1367,7 @@ local function writeSnapshot(force)
                           data.position and data.position.status, data.position and data.position.x,
                           data.position and data.position.z, data.position and data.position.originX,
                           data.gambits and data.gambits.status, data.gambits and data.gambits.sets,
+                          data.gambits and data.gambits.active,
                           data.gambitEdit, data.build and data.build.status, data.build and data.build.members,
                           data.build and data.build.owned and encode(data.build.owned),
                           data.build and data.build.stock and encode(data.build.stock),
