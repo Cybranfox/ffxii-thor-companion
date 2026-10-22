@@ -1,0 +1,6 @@
+* text=auto
+*.sh text eol=lf
+*.cmd text eol=crlf
+game-script/container/README.txt text eol=crlf
+*.png binary
+*.apk binary
