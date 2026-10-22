@@ -26,7 +26,6 @@ final class Reference {
     }
 
     final List<Entry> gear, bestiary;
-    final String sourceNote;
     private final Map<Integer, String> namesById = new java.util.HashMap<>();
     private final Map<Integer, Entry> gearById = new java.util.HashMap<>();
 
@@ -49,8 +48,8 @@ final class Reference {
     /** True when the pack lists gambit actions; then only listed IDs are ordinary party actions the editor may write. */
     boolean hasActions() { return !actions.isEmpty(); }
 
-    private Reference(List<Entry> gear, List<Entry> bestiary, String sourceNote) {
-        this.gear = gear; this.bestiary = bestiary; this.sourceNote = sourceNote;
+    private Reference(List<Entry> gear, List<Entry> bestiary) {
+        this.gear = gear; this.bestiary = bestiary;
     }
 
     /** Gear categories, most entries first (ties alphabetical). */
@@ -122,7 +121,7 @@ final class Reference {
             }
         }
         if (gear.isEmpty() && best.isEmpty()) return null;
-        Reference r = new Reference(Collections.unmodifiableList(gear), Collections.unmodifiableList(best), Json.str(root, "note"));
+        Reference r = new Reference(Collections.unmodifiableList(gear), Collections.unmodifiableList(best));
         r.namesById.putAll(ids);
         r.gearById.putAll(byId);
         Map<String, Object> ga = Json.obj(root, "gambitActions");
