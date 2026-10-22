@@ -1,18 +1,18 @@
 # Changelog
 
 ## 0.11.0-beta
-- **Updates install themselves.** A small loader goes into the game once (`install.cmd`, one last time). After that,
-  installing a new app version is the whole update: at the next game start the loader checks the new game script's
-  Ed25519 signature and runs it. Unsigned, altered, older or unknown-key scripts never run, and the app explains why in
-  plain words ("The game reports: …").
-- **Two signing keys:** a release key signs each game script by hand, passphrase-protected and never in the
-  repository. A separate offline recovery key can only replace a lost or leaked release key.
-- **Hardening:** the editor's request files are capped at 4 KB with a strict format, its replay memory is bounded, and
-  switching the editor off also drops any waiting request. The app's JSON reader refuses duplicate keys and
-  out-of-range numbers. The app writes its install files through temporary files.
-- **Honest docs:** SECURITY.md and the README now spell out what the signature protects and what it doesn't (the first
-  install, the unauthenticated editor files, other mods), and that the signature check is new and not independently
-  audited.
+- **Updates install themselves.** Run `install.cmd` one last time and it puts a small loader in the game. After that,
+  installing a new APK is the whole update: the loader picks up the new game script at the next game start.
+- **Game scripts are signed.** The loader checks each script's Ed25519 signature before running it. If it's been
+  changed, is missing, is older than one you already had or is signed with a key it doesn't know, it doesn't run, and
+  the app says what happened ("The game reports: ..."). For a changed or missing script the app puts its own copy back
+  by itself.
+- **Two keys.** I sign each release by hand with a passphrase-protected key that never goes in this repo. A second key
+  kept offline can only replace the first if it's ever lost or leaked.
+- **Editor:** request files are capped at 4 KB with a strict format, and turning the editor off also clears any request
+  that was waiting. The app's JSON reader is stricter too, and install files are written through temp files.
+- **SECURITY.md rewritten** to say plainly what the signing protects and what it doesn't (the first install, the
+  editor's files, other mods), and that the signature check is new code nobody else has audited yet.
 
 ## 0.10.0-beta
 - **Switch gambit sets from the companion.** With the editor on, each set's heading shows "· in use" or a **Use this
