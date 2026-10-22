@@ -7,7 +7,8 @@ Output folder (pushed to /sdcard/Download/FFXII_companion/atlas/ on the Thor; ne
   <mapId>_<region>_<index>.png  8-bit grayscale coverage mask (sheet value 0..127 doubled), no colour or tint:
               the game's runtime palette/tint for these masks is still unknown.
   regions.json  format "ffxii-companion-regions-1": per region file, where each sheet sits in the game's region
-              view, the connector lines and (0.12) the exit labels (menumap_names.py). Rule (evidence/map_assets/region_layout, 21 Oct 2026): a sheet's top-left
+              view, the connector lines, (0.12) the exit labels (menumap_names.py) and (0.13) the map symbols:
+              per region "icons", top-level "symbols" (icons/type_NN.png) and "thresholds" (menumap_icons.py). Rule (evidence/map_assets/region_layout, 21 Oct 2026): a sheet's top-left
               corner is its menumap_location.bin ('lmap') point and 1 layout unit = 4 sheet pixels; overlaying that
               composite on the Thor's Zertinan Caverns region screen put every visited neighbour on the game's ink.
 Each index.json entry also carries "slot" (reveal record slot from the game's navimapdata.bin, null = none) and
@@ -30,6 +31,7 @@ from PIL import Image
 
 sys.path.insert(0, str(Path(__file__).parent))
 import menumap_sloc  # noqa: E402
+import menumap_icons  # noqa: E402
 import menumap_names  # noqa: E402
 import menumap_tables  # noqa: E402
 import navimap_index  # noqa: E402
@@ -63,6 +65,20 @@ def main(vbf, out):
             labels = menumap_names.parse(vbf_extract.extract(f, index[menumap_names.PATH], blocks))
         except ValueError as e:
             print('exit labels skipped:', e)
+    thresholds, symbols = None, []                  # 0.13.0 map symbols: optional too
+    try:
+        thresholds = menumap_icons.flagrom(vbf_extract.extract(f, index[menumap_icons.FLAGROM], blocks))
+        (out / 'icons').mkdir(exist_ok=True)
+        for typ, w, h, rgba in menumap_icons.symbols(vbf_extract.extract(f, index[menumap_icons.ICON_ATLAS], blocks)):
+            buf = io.BytesIO()
+            Image.frombytes('RGBA', (w, h), rgba).save(buf, 'PNG', optimize=True)
+            fn = f'icons/type_{typ:02d}.png'
+            (out / fn).write_bytes(buf.getvalue())
+            symbols.append({'type': typ, 'file': fn, 'width': w, 'height': h,
+                            'sha256': hashlib.sha256(buf.getvalue()).hexdigest()})
+    except (KeyError, ValueError) as e:
+        print('map symbols skipped:', e)
+        thresholds, symbols = None, []
 
     def slot_of(map_id):
         if map_id >= len(nav):
@@ -73,7 +89,8 @@ def main(vbf, out):
     entries, regions = [], []
     for name in names:
         region = name.rsplit('/', 1)[1][len('menumap_'):-len('.bin')]
-        for i, s in enumerate(menumap_sloc.parse(vbf_extract.extract(f, index[name], blocks))['sheets']):
+        raw = vbf_extract.extract(f, index[name], blocks)
+        for i, s in enumerate(menumap_sloc.parse(raw)['sheets']):
             data = png_bytes(s['mask'])
             fn = f"{s['map_id']}_{region}_{i}.png"
             (out / fn).write_bytes(data)
@@ -83,7 +100,12 @@ def main(vbf, out):
                             'tiles': menumap_tile_index.occupancy(s['mask']),
                             'origin': {k: round(v, 4) for k, v in s['nps2'].items()},
                             'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
-        regions.append(region_layout(region, [e for e in entries if e['region'] == region], lmap, labels))
+        layout = region_layout(region, [e for e in entries if e['region'] == region], lmap, labels)
+        if layout and symbols:
+            layout['icons'] = [{'mapId': m, 'group': g, 'index': i, 'type': ty, 'sx': sx, 'sy': sy, 'dx': dx, 'dy': dy,
+                                'gate': gate} for (m, g, i, ty, sx, sy, dx, dy, gate) in menumap_icons.navi(raw)
+                               if 0 < ty < menumap_icons.ICON_TYPES]
+        regions.append(layout)
     per_map = {}
     for e in entries:
         per_map[e['mapId']] = per_map.get(e['mapId'], 0) + 1
@@ -95,9 +117,12 @@ def main(vbf, out):
            'sheets': entries}
     (out / 'index.json').write_text(json.dumps(doc, separators=(',', ':')), encoding='utf-8')
     regions = [r for r in regions if r]
-    (out / 'regions.json').write_text(json.dumps({'format': REGIONS_FORMAT, 'unitsPerSheetPx': UNITS_PER_SHEET_PX,
-                                                  'regions': regions}, separators=(',', ':')), encoding='utf-8')
-    print('regions with layout', len(regions), 'exit labels', sum(len(r['exits']) for r in regions))
+    doc = {'format': REGIONS_FORMAT, 'unitsPerSheetPx': UNITS_PER_SHEET_PX, 'regions': regions}
+    if symbols:
+        doc['symbols'], doc['thresholds'] = symbols, thresholds
+    (out / 'regions.json').write_text(json.dumps(doc, separators=(',', ':')), encoding='utf-8')
+    print('regions with layout', len(regions), 'exit labels', sum(len(r['exits']) for r in regions),
+          'map symbols', sum(len(r.get('icons', [])) for r in regions), 'symbol images', len(symbols))
     total = sum(e['bytes'] for e in entries)
     print(out, len(entries), 'sheets', f'{total / 1e6:.1f} MB PNG', 'multi-sheet maps',
           sum(1 for v in per_map.values() if v > 1))

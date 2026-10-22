@@ -188,7 +188,16 @@ REGIONS = {'format': 'ffxii-companion-regions-1', 'unitsPerSheetPx': 0.25, 'synt
      'exits': [{'x': 560, 'y': 500, 'lx': 575, 'ly': 500, 'text': 'To Synthetic East', 'gate': 65535},
                {'x': 100, 'y': 60, 'lx': 90, 'ly': 50, 'text': 'To Nowhere', 'gate': 27},
                {'x': 1, 'y': 1, 'lx': 1, 'text': 'No anchor'},
-               {'x': 424, 'y': 368, 'lx': 440, 'ly': 360, 'text': 'x' * 65}]}]}
+               {'x': 424, 'y': 368, 'lx': 440, 'ly': 360, 'text': 'x' * 65}],
+     # 0.13.0 map symbols on 578 (explored rows 0-7): always-gated on explored ground, flag-gated, and in the fog
+     'icons': [{'mapId': 578, 'group': 5, 'index': 0, 'type': 1, 'sx': 8, 'sy': 8, 'dx': 10, 'dy': 20, 'gate': 0},
+               {'mapId': 578, 'group': 5, 'index': 1, 'type': 2, 'sx': 8, 'sy': 8, 'dx': 30, 'dy': 20, 'gate': 0x1B},
+               {'mapId': 578, 'group': 5, 'index': 2, 'type': 1, 'sx': 8, 'sy': 200, 'dx': 10, 'dy': 50, 'gate': 0},
+               {'mapId': 578, 'group': 5, 'index': 3, 'type': 29, 'sx': 8, 'sy': 8, 'dx': 10, 'dy': 20, 'gate': 0}]}],
+    'symbols': [{'type': 1, 'file': 'icons/type_01.png', 'width': 64, 'height': 56, 'sha256': '0' * 64},
+                {'type': 2, 'file': 'icons/type_02.png', 'width': 64, 'height': 56, 'sha256': '0' * 64},
+                {'type': 3, 'file': '../evil.png', 'width': 64, 'height': 56, 'sha256': '0' * 64}],
+    'thresholds': [None, [0x8005]]}
 
 MALFORMED = {
     'malformed_truncated': '{"v":1,"type":"snapshot","seq":30,"data":{"session":{"clockUs":1',

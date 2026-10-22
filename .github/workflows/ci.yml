@@ -23,6 +23,7 @@ jobs:
         run: |
           python -B -c "import sys; sys.path.insert(0, 'builder'); import build_data_pack, vanilla_fallback, reference_pack, mapatlas_pack"
           python -B builder/tests/test_menumap_names.py
+          python -B builder/tests/test_menumap_icons.py
       - name: Build APK (debug-signed here; releases are signed locally with the release key)
         run: |
           mkdir -p ~/.android

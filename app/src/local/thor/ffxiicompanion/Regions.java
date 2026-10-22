@@ -20,6 +20,11 @@ import java.util.Map;
  * companion still shows a label only next to explored ground: a label shows when the area its exit belongs to is drawn.
  * That area is the one whose line out (a link from an area to itself) clearly ends at the exit (97 of the game's 111
  * exits), otherwise the area whose sheet is nearest.
+ *
+ * 0.13.0 (optional "icons", "symbols" and "thresholds", built from the user's files; Map_Icons_Flags_2026-10-22.md):
+ * an exit's label is dimmed while its story gate is closed, as the game does, and the map symbols are drawn where and
+ * when the game draws them (Flags.symbolVisible), each at layout (area x + display x, area y + display y). They are
+ * the game's own pictures and the app never names them: what each one means is not established.
  */
 final class Regions {
     static final String FORMAT = "ffxii-companion-regions-1";
@@ -40,11 +45,41 @@ final class Regions {
         }
     }
 
-    /** An exit: its point (x, y), where its label goes (lx, ly), all in layout units, and the label. */
+    /** An exit: its point (x, y), where its label goes (lx, ly), all in layout units, the label and its story gate. */
     static final class Exit {
-        final int x, y, lx, ly;
+        final int x, y, lx, ly, gate;
         final String text;
-        Exit(int x, int y, int lx, int ly, String text) { this.x = x; this.y = y; this.lx = lx; this.ly = ly; this.text = text; }
+        Exit(int x, int y, int lx, int ly, String text, int gate) {
+            this.x = x; this.y = y; this.lx = lx; this.ly = ly; this.text = text; this.gate = gate;
+        }
+    }
+
+    /** A map symbol row (NAVIICN2): its map, group-local index, type, source point (fog), display point, gate. */
+    static final class Icon {
+        final int mapId, group, index, type, sx, sy, dx, dy, gate;
+        Icon(int mapId, int group, int index, int type, int sx, int sy, int dx, int dy, int gate) {
+            this.mapId = mapId; this.group = group; this.index = index; this.type = type;
+            this.sx = sx; this.sy = sy; this.dx = dx; this.dy = dy; this.gate = gate;
+        }
+    }
+
+    /**
+     * A symbol to draw: its picture type, where (x, y) and the spot it marks (sx, sy), in layout units. The game draws
+     * some symbols beside their spot and, in at least one map mode, a line back to it (0x404B7D..0x404BA1).
+     */
+    static final class Shown {
+        final int type;
+        final float x, y, sx, sy;
+        Shown(int type, float x, float y, float sx, float sy) { this.type = type; this.x = x; this.y = y; this.sx = sx; this.sy = sy; }
+    }
+
+    /** A symbol picture in the atlas (icons/type_NN.png). */
+    static final class Symbol {
+        final int type, width, height;
+        final String file, sha256;
+        Symbol(int type, String file, int width, int height, String sha256) {
+            this.type = type; this.file = file; this.width = width; this.height = height; this.sha256 = sha256;
+        }
     }
 
     static final class Region {
@@ -52,8 +87,9 @@ final class Regions {
         final List<Placed> sheets;
         final List<Link> links;
         final List<Exit> exits;
-        Region(String name, List<Placed> sheets, List<Link> links, List<Exit> exits) {
-            this.name = name; this.sheets = sheets; this.links = links; this.exits = exits;
+        final List<Icon> icons;
+        Region(String name, List<Placed> sheets, List<Link> links, List<Exit> exits, List<Icon> icons) {
+            this.name = name; this.sheets = sheets; this.links = links; this.exits = exits; this.icons = icons;
         }
     }
 
@@ -62,6 +98,7 @@ final class Regions {
         Atlas.Sheet sheet;
         int x, y;               // layout units
         boolean[][] visible;    // explored and drawn tiles
+        boolean[][] revealed;   // explored tiles, drawn or not (the game's fog cells), for the symbols
         boolean focus;
     }
 
@@ -69,6 +106,8 @@ final class Regions {
         final List<Part> parts = new ArrayList<>();
         final List<Link> links = new ArrayList<>();
         final List<Exit> exits = new ArrayList<>();
+        final java.util.Set<Exit> dimmed = new java.util.HashSet<>();   // labels of locked exits (0.13.0)
+        final List<Shown> symbols = new ArrayList<>();
         String region;          // region file name, or null when unknown
         String note;            // why neighbours are missing, or null
         int neighbours;
@@ -76,6 +115,8 @@ final class Regions {
 
     final double unitsPerSheetPx;
     private final Map<String, Region> byFile = new HashMap<>();
+    final Map<Integer, Symbol> symbols = new HashMap<>();
+    int[][] thresholds;
 
     private Regions(double unitsPerSheetPx) { this.unitsPerSheetPx = unitsPerSheetPx; }
 
@@ -116,14 +157,50 @@ final class Regions {
             if (ex != null) for (Object e : ex) {
                 Long x = Json.lng(e, "x"), y = Json.lng(e, "y"), lx = Json.lng(e, "lx"), ly = Json.lng(e, "ly");
                 String label = Json.str(e, "text");
+                Long gate = Json.lng(e, "gate");
                 if (x == null || y == null || lx == null || ly == null || label == null || label.isEmpty() || label.length() > 64) continue;
-                exits.add(new Exit(x.intValue(), y.intValue(), lx.intValue(), ly.intValue(), label));
+                exits.add(new Exit(x.intValue(), y.intValue(), lx.intValue(), ly.intValue(), label,
+                        gate != null && gate >= 0 && gate <= 0xFFFF ? gate.intValue() : 0xFFFF));
+            }
+            List<Icon> icons = new ArrayList<>();
+            List<Object> ic = Json.arr(r, "icons");   // absent before 0.13.0
+            if (ic != null) for (Object o : ic) {
+                Long m = Json.lng(o, "mapId"), g = Json.lng(o, "group"), i = Json.lng(o, "index"), ty = Json.lng(o, "type");
+                Long sx = Json.lng(o, "sx"), sy = Json.lng(o, "sy"), dx = Json.lng(o, "dx"), dy = Json.lng(o, "dy");
+                Long gate = Json.lng(o, "gate");
+                if (m == null || g == null || i == null || ty == null || sx == null || sy == null || dx == null || dy == null
+                        || gate == null || ty < 1 || ty > 28 || gate < 0 || gate > 0xFFFF) continue;
+                icons.add(new Icon(m.intValue(), g.intValue(), i.intValue(), ty.intValue(), sx.intValue(), sy.intValue(),
+                        dx.intValue(), dy.intValue(), gate.intValue()));
             }
             Region reg = new Region(name, Collections.unmodifiableList(placed), Collections.unmodifiableList(links),
-                    Collections.unmodifiableList(exits));
+                    Collections.unmodifiableList(exits), Collections.unmodifiableList(icons));
             for (Placed p : placed) out.byFile.put(p.file, reg);
         }
-        return out.byFile.isEmpty() ? null : out;
+        if (out.byFile.isEmpty()) return null;
+        List<Object> sy = Json.arr(root, "symbols"), th = Json.arr(root, "thresholds");
+        if (sy != null && th != null) {
+            for (Object o : sy) {
+                Long ty = Json.lng(o, "type"), w = Json.lng(o, "width"), h = Json.lng(o, "height");
+                String file = Json.str(o, "file"), sha = Json.str(o, "sha256");
+                if (ty == null || w == null || h == null || file == null || sha == null || !file.matches("icons/type_[0-9]{2}\\.png")
+                        || w < 1 || h < 1 || w > 256 || h > 256) continue;
+                out.symbols.put(ty.intValue(), new Symbol(ty.intValue(), file, w.intValue(), h.intValue(), sha));
+            }
+            int[][] rows = new int[Math.min(th.size(), 4096)][];
+            for (int i = 0; i < rows.length; i++) {
+                if (!(th.get(i) instanceof List)) continue;
+                List<?> row = (List<?>) th.get(i);
+                if (row.size() > 64) continue;
+                rows[i] = new int[row.size()];
+                for (int k = 0; k < row.size(); k++) {
+                    Object v = row.get(k);
+                    rows[i][k] = v instanceof Long && (Long) v >= 0 && (Long) v <= 0xFFFF ? ((Long) v).intValue() : 0xFFFF;
+                }
+            }
+            out.thresholds = rows;
+        }
+        return out;
     }
 
     Region regionOf(String sheetFile) { return byFile.get(sheetFile); }
@@ -163,6 +240,7 @@ final class Regions {
         Part focus = new Part();
         focus.sheet = current.sheet;
         focus.visible = current.visible;
+        focus.revealed = current.show;
         focus.focus = true;
         Region reg = current.sheet != null ? regionOf(current.sheet.file) : null;
         if (reg == null) {
@@ -202,10 +280,12 @@ final class Regions {
             part.x = p.x;
             part.y = p.y;
             part.visible = new boolean[rows][cols];
+            part.revealed = new boolean[rows][cols];
             boolean any = false;
             for (int y = 0; y < rows; y++) {
                 for (int x = 0; x < cols; x++) {
                     boolean show = full || Reveal.cell(rec, x, y, cols, rows, sh.stride);
+                    part.revealed[y][x] = show;
                     part.visible[y][x] = show && sh.drawn(x, y);
                     any |= part.visible[y][x];
                 }
@@ -221,6 +301,18 @@ final class Regions {
             Integer owner = lineOwner(reg.links, e.x, e.y);
             if (owner == null) owner = nearestMap(reg.sheets, atlas, e.x, e.y);
             if (owner != null && shownMaps.contains(owner)) v.exits.add(e);
+        }
+        Flags flags = Flags.parse(Json.obj(s.data, "flags"));
+        for (Exit e : v.exits) if (Flags.exitDimmed(flags, e.gate, thresholds)) v.dimmed.add(e);
+        if (!symbols.isEmpty()) {
+            for (Part p : v.parts) {
+                if (p.sheet.sheetsForMap > 1) continue;     // a symbol row names a map, not one of its sheets
+                for (Icon i : reg.icons) {
+                    if (i.mapId != p.sheet.mapId || !symbols.containsKey(i.type)) continue;
+                    if (Flags.symbolVisible(flags, thresholds, i.group, i.index, i.type, i.sx, i.sy, i.gate, p.revealed))
+                        v.symbols.add(new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.sx, p.y + i.sy));
+                }
+            }
         }
         return v;
     }

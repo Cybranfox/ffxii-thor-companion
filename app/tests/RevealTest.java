@@ -147,6 +147,17 @@ public final class RevealTest {
                     && (all[2] - all[0]) * (all[3] - all[1]) > (cur[2] - cur[0]) * (cur[3] - cur[1]), "region fit covers more than the area");
             ok("exit labels only beside areas the player has visited; old packs have none; full-map fit covers every shown area");
         }
+        { // 0.13.0 map symbols: without live flags only always-gated symbols on explored ground; bad entries dropped
+            Snapshot s = fx("region_table");
+            Regions.View rv = regions.build(Reveal.decide(s, atlas, true), s, atlas);
+            check(rv.symbols.size() == 1 && rv.symbols.get(0).type == 1 && rv.symbols.get(0).x == 426 && rv.symbols.get(0).y == 348 && rv.symbols.get(0).sx == 424 && rv.symbols.get(0).sy == 336,
+                    "one symbol at 578 + display point, got " + rv.symbols.size());
+            check(regions.symbols.size() == 2 && !regions.symbols.containsKey(3), "symbol pictures only from icons/type_NN.png");
+            check(regions.thresholds != null && regions.thresholds.length == 2 && regions.thresholds[0] == null
+                    && regions.thresholds[1][0] == 0x8005, "threshold rows");
+            check(rv.dimmed.isEmpty(), "no live flags: no exit is dimmed");
+            ok("map symbols: only where explored and only when the game's gate is open; unknown flags show always-gated ones only");
+        }
         {
             Snapshot s = fx("region_no_table");
             Regions.View rv = regions.build(Reveal.decide(s, atlas, true), s, atlas);

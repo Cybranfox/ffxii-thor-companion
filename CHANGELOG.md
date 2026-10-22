@@ -7,6 +7,13 @@
   each character has queued, which isn't always the same as the cursor you see on screen.
 - Game script: reads each field member's pending action target through the game's own handle checks. Read-only, like
   everything else it reads.
+- **Map symbols.** The map now shows the game's own symbols (crystals, shop signs and so on) exactly where and when the
+  game's map shows them: only on ground you've explored and only once the story has unlocked them. They're the game's
+  pictures, cut from your own game files by the data builder. The companion doesn't label them, because nothing in the
+  game's code says for certain which symbol means what.
+- **Locked exits are greyed out**, like on the game's map, until the story opens them.
+- Game script: shares the game's story flags (read-only) so the app can do the two things above.
+- **Re-run the data builder once** for the symbols.
 - Fixed: at the title screen the game script could treat leftover memory as a loaded save (the party card showed
   "invalid" HP for a moment). It now also checks the game's own "save loaded" marker before reading anything.
 

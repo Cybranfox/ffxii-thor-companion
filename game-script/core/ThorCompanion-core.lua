@@ -361,6 +361,7 @@ local function capabilities()
     ["save.read"] = (save and save.u32) and "probe" or "off",
     ["party"] = "on",
     ["target"] = "probe",
+    ["flags"] = "probe",
     ["battle"] = "probe",
     ["gambits"] = "probe",
     ["gambits.write"] = "probe",
@@ -1471,10 +1472,49 @@ return function()
 end
 end)()
 
+--0.13.0: the game's story flags, for the map (read-only; Map_Icons_Flags_2026-10-22.md, getters checked in the exe
+--on 22 Oct). 64 bytes of generic flags at save 0x2164280 + 0x16F4 (0x32A8A0: ids 2..511 are bit id&7 of byte id/8);
+--scenario variable 0 = u16 [qword 0x2098E58] when u8 [0x2098E20] & 1 (0x265270; the input of the bit14 threshold
+--gates, 0 otherwise); the current exit = s16 [qword 0x2098E10] + 0x7E under the same gate (0x264770, -1 otherwise).
+--The app uses them to dim locked exits and to show map symbols exactly when the game does. Read twice per snapshot.
+local flagsState = (function()
+local FLAGS_AT, FLAGS_BYTES, SCRIPT_GATE, SCENARIO_PTR, EXIT_PTR = 0x2165974, 64, 0x2098E20, 0x2098E58, 0x2098E10
+
+local function readFlags()
+  local hex = {}
+  for i = 0, FLAGS_BYTES - 1 do hex[#hex + 1] = string.format("%02x", memory.u8[FLAGS_AT + i]) end
+  local r = { generic = table.concat(hex), scenario = 0, currentExit = -1 }
+  if (memory.u8[SCRIPT_GATE] & 1) ~= 0 then
+    local s = memory.u64[SCENARIO_PTR]
+    if s ~= 0 then r.scenario = memory.u16[s] end
+    local e = memory.u64[EXIT_PTR]
+    if e ~= 0 then r.currentExit = s16(e + 0x7E) end
+  end
+  return r
+end
+
+--Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
+return function()
+  local r = { contract = "ffxii.flags.v1" }
+  if not supportedBuild() then r.status = "unsupported_build"; return r end
+  local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
+  if not okp then r.status = "read_failed"; return r end
+  if ptr ~= GAMBIT_BASE or not saveLoaded() then r.status = "save_not_ready"; return r end
+  local ok1, a = pcall(readFlags)
+  local ok2, b = pcall(readFlags)
+  if not ok1 or not ok2 then r.status = "read_failed"; return r end
+  if encode(a) ~= encode(b) then r.status = "unstable"; return r end
+  r.status = "ok"
+  r.generic, r.scenario, r.currentExit = a.generic, a.scenario, a.currentExit
+  return r
+end
+end)()
+
 local function addReveal(data)
   if data.map then
     data.party = partyState()
     data.target = targetState()
+    data.flags = flagsState()
     --sampled just now, as this snapshot is built: stamp it with the snapshot's own clock (the receiver's freshness test
     --compares the two, and a later stamp would read as "time unknown")
     if data.party.status == "ok" then data.party.observedClockUs = data.session and data.session.clockUs end
@@ -1516,6 +1556,8 @@ local function writeSnapshot(force)
                           data.build and data.build.licenceNodes and data.build.licenceNodes.count,
                           data.party and data.party.status, data.party and encode(data.party.members),
                           data.target and data.target.status, data.target and encode(data.target.members),
+                          data.flags and data.flags.status, data.flags and data.flags.generic,
+                          data.flags and data.flags.scenario, data.flags and data.flags.currentExit,
                           data.battle and data.battle.status, data.battle and data.battle.flags,
                           data.battle and data.battle.changes))
   local now = safeCall(event.getClock) or 0

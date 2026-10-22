@@ -986,6 +986,22 @@ public class MainActivity extends Activity {
         if (atlas == null) { atlasProblem = "map atlas index unreadable"; return; }
         byte[] reg = DataFiles.readBytes(new File(atlasDir, "regions.json"), Regions.MAX_BYTES);
         regions = reg == null ? null : Regions.parse(new String(reg, StandardCharsets.UTF_8));
+        Map<Integer, Bitmap> art = regions != null ? symbolArt(regions) : null;
+        mapView.setSymbolArt(art);
+        bigMap.setSymbolArt(art);
+    }
+
+    /** 0.13.0: the map symbol pictures, each only when its sha256 matches regions.json; null when there are none. */
+    Map<Integer, Bitmap> symbolArt(Regions r) {
+        if (r.symbols.isEmpty()) return null;
+        Map<Integer, Bitmap> out = new java.util.HashMap<>();
+        for (Regions.Symbol s : r.symbols.values()) {
+            byte[] data = DataFiles.readBytes(new File(atlasDir, s.file), 256 * 1024);
+            if (data == null || !s.sha256.equals(DataFiles.sha256(data))) continue;
+            Bitmap b = BitmapFactory.decodeByteArray(data, 0, data.length);
+            if (b != null && b.getWidth() == s.width && b.getHeight() == s.height) out.put(s.type, b);
+        }
+        return out;
     }
 
     /**

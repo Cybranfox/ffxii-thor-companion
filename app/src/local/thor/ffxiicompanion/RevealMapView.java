@@ -25,7 +25,8 @@ import java.util.Map;
  * Colours are the companion's own (the game's tint is not recovered). The "you are here" marker (Position) is drawn
  * on the current area at sheet px (px, py): solid when the feed is live, hollow when it is only the last known spot.
  * Exit labels (0.12.0) are drawn centred on their anchor; one that would overlap a label already drawn moves a line
- * down or up, and is left out only when there is no room.
+ * down or up, and is left out only when there is no room. A locked exit's label is drawn faded, as the game dims it
+ * (0.13.0). Map symbols (0.13.0) are the game's own pictures, centred on their point at a fixed on-screen size.
  *
  * Two uses:
  * - the Status card (not interactive): centred on the current area with a margin, so neighbours show at its edges;
@@ -48,6 +49,11 @@ final class RevealMapView extends View {
     private List<Regions.Part> parts = new ArrayList<>();
     private List<Regions.Link> links = new ArrayList<>();
     private List<Regions.Exit> exits = new ArrayList<>();
+    private java.util.Set<Regions.Exit> dimmed = new java.util.HashSet<>();
+    private List<Regions.Shown> shown = new ArrayList<>();
+    private Map<Integer, Bitmap> symbolArt;
+    private final float symbolPx;
+    private final Paint symbolPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private Map<String, Bitmap> masks;
     private int sample = 1;
     private final Paint focusPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
@@ -82,6 +88,7 @@ final class RevealMapView extends View {
         markerFill.setColor(0xFFFF8C28);
         markerRing.setStyle(Paint.Style.STROKE);
         float px = labelSp * c.getResources().getDisplayMetrics().scaledDensity;
+        symbolPx = labelSp * 1.5f * c.getResources().getDisplayMetrics().density;
         for (Paint p : new Paint[] { label, labelHalo }) {
             p.setTextSize(px);
             p.setTypeface(Typeface.create(Typeface.SERIF, Typeface.BOLD));
@@ -117,6 +124,12 @@ final class RevealMapView extends View {
     }
 
     void setOnMoved(OnMoved l) { onMoved = l; }
+
+    /** The symbol pictures by type (from the atlas, checked against their hashes); null draws none. */
+    void setSymbolArt(Map<Integer, Bitmap> art) {
+        symbolArt = art;
+        invalidate();
+    }
 
     /** Full map: back to the whole explored region, unzoomed. */
     void recentre() {
@@ -174,6 +187,8 @@ final class RevealMapView extends View {
         this.parts = parts != null ? parts : new ArrayList<>();
         this.links = v != null ? v.links : new ArrayList<>();
         this.exits = v != null ? v.exits : new ArrayList<>();
+        this.dimmed = v != null ? v.dimmed : new java.util.HashSet<>();
+        this.shown = v != null ? v.symbols : new ArrayList<>();
         this.masks = masks;
         this.sample = sample;
         String r = v != null ? v.region : null;
@@ -211,6 +226,7 @@ final class RevealMapView extends View {
         linkPaint.setStrokeWidth(Math.max(1.5f, 2.5f * scale));
         for (Regions.Link l : links) canvas.drawLine(ox + l.ax * scale, oy + l.ay * scale, ox + l.bx * scale, oy + l.by * scale, linkPaint);
         drawPart(canvas, focus, focusPaint, scale, ox, oy);
+        drawSymbols(canvas, scale, ox, oy);
         float d = getResources().getDisplayMetrics().density;
         if (markerPx != null && markerPy != null) {
             float cx = ox + (focus.x + markerPx * UNITS_PER_PX) * scale, cy = oy + (focus.y + markerPy * UNITS_PER_PX) * scale;
@@ -221,6 +237,19 @@ final class RevealMapView extends View {
             canvas.drawCircle(cx, cy, r, markerRing);
         }
         drawLabels(canvas, scale, ox, oy, d);
+    }
+
+    private void drawSymbols(Canvas canvas, float scale, float ox, float oy) {
+        if (symbolArt == null) return;
+        for (Regions.Shown s : shown) {
+            Bitmap bm = symbolArt.get(s.type);
+            if (bm == null) continue;
+            float h = symbolPx, w = h * bm.getWidth() / bm.getHeight();
+            float cx = ox + s.x * scale, cy = oy + s.y * scale;
+            if (s.x != s.sx || s.y != s.sy) canvas.drawLine(cx, cy, ox + s.sx * scale, oy + s.sy * scale, linkPaint);
+            dst.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2);
+            canvas.drawBitmap(bm, null, dst, symbolPaint);
+        }
     }
 
     private void drawLabels(Canvas canvas, float scale, float ox, float oy, float d) {
@@ -243,8 +272,13 @@ final class RevealMapView extends View {
                 for (RectF t : taken) if (RectF.intersects(t, box)) { clash = true; break; }
                 if (clash) continue;
                 taken.add(box);
+                int alpha = dimmed.contains(e) ? 0x70 : 0xFF;      // a locked route, faded like the game's
+                label.setAlpha(alpha);
+                labelHalo.setAlpha(alpha);
                 canvas.drawText(e.text, cx, y, labelHalo);
                 canvas.drawText(e.text, cx, y, label);
+                label.setAlpha(0xFF);
+                labelHalo.setAlpha(0xFF);
                 break;
             }
         }
