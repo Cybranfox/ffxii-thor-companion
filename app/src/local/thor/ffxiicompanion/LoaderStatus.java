@@ -34,10 +34,10 @@ final class LoaderStatus {
         switch (result) {
             case "tampered":
             case "bad_format":
-                m = "the game script could not be verified, so it did not run. Open this app once (it restores the files), then restart the game.";
+                m = "the game script could not be verified, so it did not run. This app has put its own copy back: restart the game.";
                 break;
             case "missing":
-                m = "the game script is missing. Open this app once to copy its files, then restart the game.";
+                m = "the game script was missing. This app has put its own copy back: restart the game.";
                 break;
             case "rollback":
                 m = "this game script is older than one already installed. Install the latest companion APK from the official releases page, then restart the game.";
@@ -59,6 +59,11 @@ final class LoaderStatus {
                 m = "the verified game script couldn't start. Install the latest companion update and restart the game.";
         }
         return "The game reports: " + m;
+    }
+
+    /** Refusals the app fixes itself by restoring its bundled files (the next game start then works). */
+    static boolean restorable(String result) {
+        return "tampered".equals(result) || "bad_format".equals(result) || "missing".equals(result);
     }
 
     /**

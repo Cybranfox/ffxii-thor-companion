@@ -121,6 +121,7 @@ public class MainActivity extends Activity {
     ReceiverState state;
     final AutoClosePolicy autoClose = new AutoClosePolicy();
     boolean installSynced;
+    long restoredFor = -1;
 
     final Runnable poll = new Runnable() {
         @Override public void run() {
@@ -546,6 +547,10 @@ public class MainActivity extends Activity {
         for (String s : SLOTS) newestSnapshot = Math.max(newestSnapshot, new File(dir, s).lastModified());
         String loaderResult = receipt.isFile() && receipt.length() <= LoaderStatus.MAX_BYTES ? LoaderStatus.result(readText(receipt)) : null;
         String loaderProblem = receipt.lastModified() > newestSnapshot ? LoaderStatus.message(loaderResult) : null;
+        if (loaderProblem != null && LoaderStatus.restorable(loaderResult) && receipt.lastModified() != restoredFor) {
+            restoredFor = receipt.lastModified();   // put the app's own copies back right away (once per refusal)
+            installSynced = Installer.sync(getAssets(), INSTALL_DIR) >= 0;
+        }
         if (loaderProblem != null && v.transport != ReceiverState.Transport.LIVE) {
             setStatus("Not running", BAD, loaderProblem);
         } else switch (v.transport) {
