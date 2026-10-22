@@ -15,7 +15,9 @@ if not exist "%X%\modules\ff12-lua-loader.dll" set "MISSING=1"
 if defined MISSING echo WARNING: FF12 External File Loader / LUA Script Loader not found. Install them first (see INSTALL). >> "%RES%"
 if not exist "%X%\msvcp140.dll" echo WARNING: no msvcp140.dll in x64. Under GameNative the loaders need the app-local C++ runtime (see INSTALL). >> "%RES%"
 if not exist "%X%\scripts" mkdir "%X%\scripts"
-if exist "%X%\scripts\ThorCompanion.lua" copy /b /y "%X%\scripts\ThorCompanion.lua" "%HERE%ThorCompanion.previous.lua" > nul
+rem Keep the copy that is being replaced, but not when it is this same script (running install.cmd twice must not
+rem overwrite the backup with the new file). Wine has no fc, so "same" = same size as the new script.
+if exist "%X%\scripts\ThorCompanion.lua" for %%A in ("%X%\scripts\ThorCompanion.lua") do for %%B in ("%HERE%ThorCompanion.lua") do if not "%%~zA"=="%%~zB" copy /b /y "%X%\scripts\ThorCompanion.lua" "%HERE%ThorCompanion.previous.lua" > nul
 copy /b /y "%HERE%ThorCompanion.lua" "%X%\scripts\ThorCompanion.lua" > nul
 if errorlevel 1 (echo FAILED: could not copy into %X%\scripts >> "%RES%" & goto end)
 if not exist "%X%\scripts\ThorCompanion.lua" (echo FAILED: copy did not land >> "%RES%" & goto end)

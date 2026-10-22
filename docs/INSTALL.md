@@ -54,6 +54,13 @@ Foedex Clan Primer). The folder is built from your files for your own use. Pleas
 4. Launch the game with the companion open on the bottom screen. The header changes from "Waiting" to **Live** once
    you're in game.
 
+## 4. Open the companion with the game (Cocoon)
+
+If you launch games from **Cocoon**, it can open the companion on the bottom screen every time you start FFXII:
+find FINAL FANTASY XII (the PC entry) › press **Y** › **Edit** › **Companion App** › **FFXII Companion** › save with the
+check mark. Uninstalling the app clears this link, so set it again after a reinstall. Updating over the old version
+keeps it. If you start the game from GameNative directly, open FFXII Companion on the bottom screen yourself.
+
 ## Gambit editor (optional)
 
 Gambits tab › **Gambit editor: off › Turn on…** › read the note › **Yes, turn on**. It starts with the **next game
