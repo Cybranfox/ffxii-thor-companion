@@ -78,8 +78,11 @@ final class GambitEdit {
     static boolean validCondition(int c) { return c >= 0x6000 && c < 0x6100; }
 
     static boolean validAction(int a) {
-        return a <= 0x50 || (a >= 0x52 && a <= 0x91) || a == 0x96 || (a >= 0x9E && a <= 0x9E + 0x17);
+        return a <= 0x50 || (a >= 0x52 && a <= 0x91 && !reservedItem(a)) || a == 0x96 || (a >= 0x9E && a <= 0x9E + 0x17);
     }
+
+    /** 0x6F..0x7B sit inside the item range but are reserved records, not items (Action_IDs_and_Set_Switch_2026-10-22). */
+    static boolean reservedItem(int a) { return a >= 0x6F && a <= 0x7B; }
 
     /**
      * Everything seen in this game session's live gambit data (0.11.2): conditions party-wide, actions per member. Gambits

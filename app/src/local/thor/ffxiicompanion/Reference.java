@@ -41,6 +41,14 @@ final class Reference {
     /** Gambit condition name (0x6000+n) from the modded battle pack, or null (bundle without gambitConditions). */
     String conditionName(int id) { return conditions.get(id); }
 
+    private final Map<Integer, String> actions = new java.util.HashMap<>();
+
+    /** Gambit action name exactly as the game's menu shows it (data pack gambitActions), or null for older packs. */
+    String actionName(int id) { return actions.get(id); }
+
+    /** True when the pack lists gambit actions; then only listed IDs are ordinary party actions the editor may write. */
+    boolean hasActions() { return !actions.isEmpty(); }
+
     private Reference(List<Entry> gear, List<Entry> bestiary, String sourceNote) {
         this.gear = gear; this.bestiary = bestiary; this.sourceNote = sourceNote;
     }
@@ -117,6 +125,17 @@ final class Reference {
         Reference r = new Reference(Collections.unmodifiableList(gear), Collections.unmodifiableList(best), Json.str(root, "note"));
         r.namesById.putAll(ids);
         r.gearById.putAll(byId);
+        Map<String, Object> ga = Json.obj(root, "gambitActions");
+        if (ga != null) {
+            for (Map.Entry<String, Object> e : ga.entrySet()) {
+                if (!(e.getValue() instanceof String)) continue;
+                try {
+                    r.actions.put(Integer.parseInt(e.getKey(), 16), (String) e.getValue());
+                } catch (NumberFormatException ignored) {
+                    // not an action id
+                }
+            }
+        }
         Map<String, Object> gc = Json.obj(root, "gambitConditions");
         if (gc != null) {
             for (Map.Entry<String, Object> e : gc.entrySet()) {

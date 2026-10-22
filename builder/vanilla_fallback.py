@@ -74,12 +74,22 @@ def build(install=DEFAULT, lang='us'):
             name = text(struct.unpack_from('<H', row, 8)[0])
             if name:
                 gear[i] = {'id': i, 'name': name, 'category': 'items', 'tags': [], 'lines': []}
+        # Gambit actions as the game's menu names them: a stored action u16 is a section-14 record index and the menu shows
+        # that record's +0x34 text (Action_IDs_and_Set_Switch_2026-10-22). Only the ordinary party families are listed
+        # (class 0 attack, 1 magick, 2 technick, 3 item), so the list doubles as the set of actions the editor may write.
+        actions = {}
+        for a, row in enumerate(records(14)):
+            if row[0x1e] in (0, 1, 2, 3):
+                name = text(struct.unpack_from('<H', row, 0x34)[0])
+                if name:
+                    actions[f'{a:04x}'] = name
         conditions, cond_unknown = condition_names(pack)
         ref = {'format': 'ffxii-companion-reference-1', 'kind': 'REFERENCE', 'language': lang,
             'note': 'Vanilla-only partial reference; descriptions, bestiary and tips are unavailable in this prototype.',
             'sources': {'vanillaBattlePack': {'file': pack_path, **sources[pack_path]}},
             'gear': [gear[k] for k in sorted(gear)], 'bestiary': [], 'tips': [],
-            'gambitConditions': {f'{k:04x}': v for k,v in sorted(conditions.items())}}
+            'gambitConditions': {f'{k:04x}': v for k,v in sorted(conditions.items())},
+            'gambitActions': actions}
         nodes = records(12)
         names = {str(i): text(struct.unpack_from('<H', row)[0]) for i,row in enumerate(nodes)}
         boards = []

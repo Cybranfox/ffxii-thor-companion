@@ -94,6 +94,8 @@ final class Gambits {
     /** Action name via the modded reference bundle; raw ID when unknown or when no bundle is installed. */
     static String action(int a, Reference ref) {
         if (a == 0xFFFF) return "(none)";
+        String exact = ref != null ? ref.actionName(a) : null;   // the menu's own wording, from the data pack
+        if (exact != null) return exact;
         if (a == 0x96) return "Attack";
         Integer key = null;
         if (a <= 0x50) key = 0x3000 + a;

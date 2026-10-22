@@ -16,6 +16,9 @@
   `uninstall.cmd`, to `Download/FFXII_companion/install`.
 - **Game script:** removed research-only features (save dump, battle log file, running other mods' config files as
   code). The editor now also works without *The Insurgent's Manifesto*, on the normal three gambit sets.
+- **Gambit actions use the game's exact menu names:** the data pack now includes them, so the companion matches the
+  game word for word, even with description mods installed. The editor never writes the 13 reserved records that sit
+  inside the item range.
 - **Data builder:** builds all core data from the unmodded game files. Optional mods add gear descriptions and the
   bestiary.
 

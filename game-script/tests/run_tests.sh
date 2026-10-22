@@ -8,7 +8,14 @@ cd "$(dirname "$0")"
 python test_reveal_family.py
 P="${FFXII_BATTLE_PACK:-}"; H="${FFXII_PROBE_HISTORY:-}"; S="${FFXII_SAVE_DUMP:-}"
 if [ -f "$P" ] && [ -f "$H" ]; then
-  python test_gambit_editor.py "$P" "$H"
+  # With the save dump and the app's own command files (written by app/tests/run_tests.sh), the editor test also runs
+  # the real-dump setslot gates and cross-checks the commands the app sends.
+  O=../../app/tests/out
+  if [ -f "$S" ] && [ -f "$O/java_gambit_cmd.txt" ] && [ -f "$O/java_gambit_set_cmd.txt" ] && [ -f "$O/java_gambit_setslot_cmd.txt" ]; then
+    python test_gambit_editor.py "$P" "$H" "$O/java_gambit_cmd.txt" "$O/java_gambit_set_cmd.txt" "$S" "$O/java_gambit_setslot_cmd.txt"
+  else
+    python test_gambit_editor.py "$P" "$H"
+  fi
   python test_battle_family.py "$P" "$H"
   if [ -f "$S" ]; then
     python test_build_family.py "$P" "$H" "$S"

@@ -695,7 +695,10 @@ local function writeSetSlot(m, k, slot, old, new)
   if new.bits ~= old.bits then memory.u16[a + 0x30] = new.bits end
 end
 
+--Ordinary party actions only. 0x6F..0x7B lie inside the item range but are reserved records, not items, so they are
+--never written (supported pack layout; an action-table mod would need a fresh check).
 local function validAction(a)
+  if a >= 0x6F and a <= 0x7B then return false end
   return a <= 0x50 or (a >= 0x52 and a <= 0x91) or a == 0x96 or (a >= 0x9E and a <= 0x9E + 0x17)
 end
 

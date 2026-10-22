@@ -452,7 +452,8 @@ def main():
         cases = [(dict(newCond='60b5', newAction='%04x' % not_bought), 'action_not_owned'),  # a magick nobody bought
                  (dict(newCond='60b5', newAction='0000'), 'action_not_licensed'),           # Cure: owned, Vaan has no licence
                  (dict(newCond='60ff', newAction='0052'), 'condition_not_owned'),           # the one gambit not owned
-                 (dict(newCond='60b5', newAction='0051'), 'bad_action')]
+                 (dict(newCond='60b5', newAction='0051'), 'bad_action'),
+                 (dict(newCond='60b5', newAction='0070'), 'bad_action')]
         for over, reason in cases:
             w = fresh()
             w.command(0, 0, 7, 'setslot', 'test-setslot-' + reason.replace('_', '-')[:18], **over)
