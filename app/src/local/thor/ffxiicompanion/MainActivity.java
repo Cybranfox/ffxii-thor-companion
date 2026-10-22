@@ -4,10 +4,8 @@ import android.app.Activity;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
-import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
@@ -25,29 +23,24 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 
 /**
- * Bottom-screen receiver for the FFXII Thor companion (read-only).
- * Polls the two A/B snapshot files that ThorCompanion.lua writes to Wine D:\FFXII_companion\live
- * (= /sdcard/Download/FFXII_companion/live) and shows the newest valid one. Selection, session and
- * freshness rules live in ReceiverState.
+ * The companion's one screen, on the Thor's bottom display. Polls the two A/B snapshot files the game script writes to
+ * Download/FFXII_companion/live and shows the newest valid one (selection, session and freshness rules: ReceiverState).
  *
- * Map fog (0.5.0): draws the current area's menu map from the local atlas (Download/FFXII_companion/atlas,
- * built on the PC from the user's own game files) only where Reveal's verified-data gate allows it.
+ * Tabs:
+ * - Status: location, the explored map of the region (atlas built on the PC from the user's own game files, gated by
+ *   Reveal), the party, and collapsed Details.
+ * - Gambits: live sets (Gambits), suggestions (GambitPlan) and the opt-in editor (GambitEdit, GambitsView).
+ * - Equip and Bestiary: the data pack's reference.json (Reference), with live equipped gear and Optimize.
+ * - Licenses: both boards (LicenceBoards) with the live licences (Build, LicenceRules).
  *
- * Reference (0.8.0): Gear and Bestiary tabs browse Download/FFXII_companion/reference/reference.json, built on the
- * PC from files the user's mods write (Reference). Always labelled REFERENCE, never live. Fixture mode may point it
- * elsewhere with "referenceDir"; test renders may open a tab with the string extra "tab" (gambits | gear | bestiary).
- *
- * Gambits (0.9.0): read-only live gambit lists from data.gambits (Gambits); action names via the reference bundle.
- * Gambit editor (0.10.0): when data.gambitEdit reports the game script armed, a slot can be switched ON/OFF (GambitEdit).
+ * Live data is only shown for a verified game build; synthetic test data only in the JVM tests (fixtureMode).
+ * File reads are bounded (DataFiles). The app also keeps Download/FFXII_companion/install in step with its own
+ * bundled game script (Installer) and reports the loader's receipt (LoaderStatus).
  */
 public class MainActivity extends Activity {
     static final File LIVE_DIR = new File(Environment.getExternalStorageDirectory(), "Download/FFXII_companion/live");
@@ -92,20 +85,17 @@ public class MainActivity extends Activity {
     File referenceDir = REFERENCE_DIR;
     Reference reference;
     String referenceProblem;
-    int[][] liveGear;       // 0.18.0: equipped IDs from the live build (verified build, live session only)
+    int[][] liveGear;       // equipped IDs from the live build (verified build, live session only)
     String liveGearKey;
-    Build liveGearBuild;    // 0.19.0: the build behind liveGear (licences, equipment stock) for Optimize suggestions
-    EquipTable equipTable;  // 0.19.0: live/equipment.json from logger 0.5.12, loaded once per change of the file
+    Build liveGearBuild;    // the build behind liveGear (licences, equipment stock) for Optimize suggestions
     TextView[] tabs;
     ScrollView liveScroll;
     ReferenceView gearView, bestiaryView;
-    LicencesView licencesView;           // 0.21.0
+    LicencesView licencesView;
     LicenceBoards boardsCache;           // boards.json, loaded once
     String boardsProblem;
     GambitsView gambitsView;
     final GambitEdit.Seen gambitsSeen = new GambitEdit.Seen();
-    long licenceNodesMtime = Long.MIN_VALUE;
-    LicenceNodes licenceNodesCache;
     TextView referenceMissing;
     int tab;
     final Map<String, Bitmap> masks = new java.util.LinkedHashMap<String, Bitmap>(MASK_CACHE, 0.75f, true) {
@@ -115,10 +105,16 @@ public class MainActivity extends Activity {
     boolean detailsOpen;
     String detailsSummary = "";
     Button grant;
-    File dir = LIVE_DIR;
+    final File dir = LIVE_DIR;
+    /** The game script's licence table and equipment table, next to the snapshots; re-read when they change. */
+    final DataFiles.Cached<LicenceNodes> licenceNodes =
+            new DataFiles.Cached<>(new File(dir, "licence_nodes.json"), LicenceNodes.MAX_BYTES, LicenceNodes::parse);
+    final DataFiles.Cached<EquipTable> equipTable =
+            new DataFiles.Cached<>(new File(dir, "equipment.json"), 256 * 1024, EquipTable::parse);
     /** Synthetic test data is only accepted by the JVM tests; the app itself always treats it as untrusted. */
     final boolean fixtureMode = false;
     ReceiverState state;
+    ReceiverState.View lastView;
     final AutoClosePolicy autoClose = new AutoClosePolicy();
     boolean installSynced;
     long restoredFor = -1;
@@ -268,7 +264,7 @@ public class MainActivity extends Activity {
         locationCard.addView(location);
         body.addView(locationCard, cardParams(-1, 0));
 
-        // Map: explored parts of the current area only (verified-data gate in Reveal). No position marker.
+        // Map: the explored parts of the region around the current area (gated by Reveal), with the player marker.
         mapCard = cardShell();
         LinearLayout mapHead = new LinearLayout(this);
         mapHead.setGravity(Gravity.CENTER_VERTICAL);
@@ -374,7 +370,7 @@ public class MainActivity extends Activity {
     /** Loads and binds reference.json once; null (with referenceProblem) when missing or unreadable. */
     Reference loadReference() {
         if (reference != null) return reference;
-        byte[] data = readBytes(new File(referenceDir, "reference.json"), Reference.MAX_BYTES);
+        byte[] data = DataFiles.readBytes(new File(referenceDir, "reference.json"), Reference.MAX_BYTES);
         if (data == null) { referenceProblem = "reference.json missing"; return null; }
         reference = Reference.parse(new String(data, StandardCharsets.UTF_8));
         if (reference == null) { referenceProblem = "reference.json unreadable"; return null; }
@@ -439,22 +435,11 @@ public class MainActivity extends Activity {
     }
 
     TextView text(String s, int sp, int color, boolean bold) {
-        TextView t = new TextView(this);
-        t.setText(s);
-        t.setTextSize(sp);
-        t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
-        return t;
+        return Theme.label(this, s, sp, color, bold);
     }
 
-    /** Rounded background; panels (CARD) and highlights (ACCENT) get the 0.21.0 FFXII-style treatment. */
     android.graphics.drawable.Drawable round(int color, int radiusDp) {
-        if (color == CARD) return Theme.panel(dp(radiusDp), dp(1));
-        if (color == ACCENT) return Theme.selected(dp(radiusDp), dp(1));
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(color);
-        bg.setCornerRadius(dp(radiusDp));
-        return bg;
+        return Theme.fill(color, dp(radiusDp), dp(1));
     }
 
     int dp(int v) {
@@ -505,7 +490,7 @@ public class MainActivity extends Activity {
             File f = new File(dir, SLOTS[i]);
             if (!f.isFile()) continue;
             present = true;
-            slots[i] = Snapshot.parse(readText(f), f.lastModified());
+            slots[i] = Snapshot.parse(DataFiles.readText(f, Snapshot.MAX_BYTES), f.lastModified());
             if (slots[i] == null) malformed++;
         }
         ReceiverState.View v = state.update(slots[0], slots[1], malformed, present,
@@ -518,17 +503,6 @@ public class MainActivity extends Activity {
     void closeAfterExit(boolean running, boolean exited, boolean synthetic) {
         if (fixtureMode) return;
         if (autoClose.update(running, exited, synthetic, SystemClock.elapsedRealtime())) finishAndRemoveTask();
-    }
-
-    static String readText(File f) {
-        try (FileInputStream in = new FileInputStream(f)) {
-            byte[] buf = new byte[(int) Math.min(f.length(), Snapshot.MAX_BYTES + 1)];
-            int n = 0, r;
-            while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0) n += r;
-            return new String(buf, 0, n, StandardCharsets.UTF_8);
-        } catch (IOException e) {
-            return null;
-        }
     }
 
     void render(ReceiverState.View v) {
@@ -545,7 +519,7 @@ public class MainActivity extends Activity {
         File receipt = new File(dir, "loader_status.json");
         long newestSnapshot = 0;
         for (String s : SLOTS) newestSnapshot = Math.max(newestSnapshot, new File(dir, s).lastModified());
-        String loaderResult = receipt.isFile() && receipt.length() <= LoaderStatus.MAX_BYTES ? LoaderStatus.result(readText(receipt)) : null;
+        String loaderResult = receipt.isFile() && receipt.length() <= LoaderStatus.MAX_BYTES ? LoaderStatus.result(DataFiles.readText(receipt, LoaderStatus.MAX_BYTES)) : null;
         String loaderProblem = receipt.lastModified() > newestSnapshot ? LoaderStatus.message(loaderResult) : null;
         if (loaderProblem != null && LoaderStatus.restorable(loaderResult) && receipt.lastModified() != restoredFor) {
             restoredFor = receipt.lastModified();   // put the app's own copies back right away (once per refusal)
@@ -558,17 +532,14 @@ public class MainActivity extends Activity {
                 setStatus("Waiting", DIM, "Start FFXII to begin. First time? Run install.cmd from Download/FFXII_companion/install"
                         + " in the game's GameNative container (see README.txt there)." + bad);
                 break;
-            case GAME_CLOSED: {
-                Map<String, Object> sess = Json.obj(v.current.data, "session");
-                String type = sess != null && Json.str(sess, "exitType") != null ? Json.str(sess, "exitType") : "exit";
-                setStatus("Game closed", DIM, "Last played " + ago(v.transportAgeMs) + "." + bad);
+            case GAME_CLOSED:
+                setStatus("Game closed", DIM, "Last played " + Details.secs(v.transportAgeMs) + " ago." + bad);
                 break;
-            }
             case NO_SIGNAL:
                 setStatus("No signal", WARN, "Showing the last known state." + bad);
                 break;
             case STALE:
-                setStatus("Paused", WARN, "No update for " + secs(v.transportAgeMs) + " (paused, loading or closed)." + bad);
+                setStatus("Paused", WARN, "No update for " + Details.secs(v.transportAgeMs) + " (paused, loading or closed)." + bad);
                 break;
             default: {
                 Map<String, Object> hello = v.current != null ? v.current.hello() : null;
@@ -592,10 +563,10 @@ public class MainActivity extends Activity {
             return;
         }
         Map<String, Object> hello = v.current.hello();
-        showSession(v.current, hello);
-        showBuild(hello);
-        showMods(hello);
-        showCaps(hello);
+        session.setText(Details.session(v.current, hello));
+        build.setText(Details.build(hello));
+        mods.setText(Details.mods(hello));
+        caps.setText(Details.feeds(hello));
     }
 
     String appVersion() {
@@ -697,7 +668,7 @@ public class MainActivity extends Activity {
         long s = f.isFile() ? f.lastModified() : 0;
         if (s == areasStamp) return;
         areasStamp = s;
-        byte[] d = s == 0 ? null : readBytes(f, 256 * 1024);
+        byte[] d = s == 0 ? null : DataFiles.readBytes(f, 256 * 1024);
         Place.setNames(d == null ? null : Place.parse(new String(d, StandardCharsets.UTF_8)));
     }
 
@@ -770,8 +741,6 @@ public class MainActivity extends Activity {
         mapNote.setVisibility(View.GONE);
     }
 
-    ReceiverState.View lastView;
-
     static String join(String... parts) {
         StringBuilder b = new StringBuilder();
         for (String p : parts) if (p != null && !p.isEmpty()) b.append(b.length() > 0 ? " · " : "").append(p);
@@ -781,11 +750,10 @@ public class MainActivity extends Activity {
     /** 0.21.0: boards.json (beside reference.json), loaded once; null with boardsProblem when missing. */
     LicenceBoards boards() {
         if (boardsCache != null) return boardsCache;
-        byte[] data = readBytes(new File(referenceDir, "boards.json"), 512 * 1024);
-        if (data == null) { boardsProblem = "Game data not installed yet (run the data builder, see INSTALL)"; return null; }
-        Object o;
-        try { o = Json.parse(new String(data, StandardCharsets.UTF_8)); } catch (RuntimeException e) { o = null; }
-        boardsCache = o instanceof Map ? LicenceBoards.parse(Json.obj(java.util.Collections.singletonMap("x", o), "x")) : null;
+        File f = new File(referenceDir, "boards.json");
+        if (!f.isFile()) { boardsProblem = "Game data not installed yet (run the data builder, see INSTALL)"; return null; }
+        Map<String, Object> o = DataFiles.jsonObject(f, 512 * 1024);
+        boardsCache = o != null ? LicenceBoards.parse(o) : null;
         if (boardsCache == null) boardsProblem = "boards.json unreadable";
         return boardsCache;
     }
@@ -801,7 +769,7 @@ public class MainActivity extends Activity {
         else if ((b = Build.parse(Json.obj(s.data, "build"))) == null) why = "No licence data yet (load a save).";
         LicenceBoards lb = why == null ? boards() : null;
         if (why == null && lb == null) why = boardsProblem;
-        licencesView.show(b, licenceNodes(), lb, reference, why);
+        licencesView.show(b, licenceNodes.get(), lb, reference, why);
     }
 
     /** Gear tab: a chip per member with what they have equipped right now (when live), then the reference categories. */
@@ -810,8 +778,8 @@ public class MainActivity extends Activity {
         if (r == null) return;
         final int[][] gear = liveGear;
         final Build gb = liveGearBuild;
-        final EquipTable et = equipTable();
-        final LicenceNodes ln = gb != null ? licenceNodes() : null;
+        final EquipTable et = equipTable.get();
+        final LicenceNodes ln = gb != null ? licenceNodes.get() : null;
         gearView.bind(new ReferenceView.Source() {
             @Override public List<String> filters() {
                 List<String> f = new java.util.ArrayList<>();
@@ -870,7 +838,7 @@ public class MainActivity extends Activity {
         if (why == null && ms != null && live) gambitsSeen.update(v.session, ms);   // only live, verified data
         gambitsView.setSeen(gambitsSeen);
         Build build = why == null && live ? Build.parse(Json.obj(s.data, "build")) : null;
-        LicenceNodes nodes = build != null ? licenceNodes() : null;
+        LicenceNodes nodes = build != null ? licenceNodes.get() : null;
         gambitsView.setBuild(build, nodes);
         gambitsView.setPlans(ms != null ? GambitPlan.suggest(build, nodes, reference, ms) : null);
         GambitEdit.State es = s != null ? GambitEdit.parse(Json.obj(s.data, "gambitEdit")) : null;
@@ -882,38 +850,6 @@ public class MainActivity extends Activity {
         gambitsView.show(ms, reference, st, live);
     }
 
-    /** The game script's live/licence_nodes.json (next to the snapshots), re-read only when the file changes. */
-    LicenceNodes licenceNodes() {
-        File f = new File(dir, "licence_nodes.json");
-        long mt = f.isFile() ? f.lastModified() : -1;
-        if (mt != licenceNodesMtime) {
-            licenceNodesMtime = mt;
-            byte[] data = mt < 0 ? null : readBytes(f, LicenceNodes.MAX_BYTES);
-            Object o = null;
-            try { o = data == null ? null : Json.parse(new String(data, java.nio.charset.StandardCharsets.UTF_8)); }
-            catch (RuntimeException e) { o = null; }
-            licenceNodesCache = o instanceof Map ? LicenceNodes.parse(Json.obj(java.util.Collections.singletonMap("x", o), "x")) : null;
-        }
-        return licenceNodesCache;
-    }
-
-    private long equipTableMtime = -2;
-
-    /** 0.19.0: live/equipment.json (logger 0.5.12), reloaded when the file changes; null when missing or invalid. */
-    EquipTable equipTable() {
-        File f = new File(dir, "equipment.json");
-        long mt = f.isFile() ? f.lastModified() : -1;
-        if (mt != equipTableMtime) {
-            equipTableMtime = mt;
-            byte[] data = mt < 0 ? null : readBytes(f, 256 * 1024);
-            Object o = null;
-            try { o = data == null ? null : Json.parse(new String(data, java.nio.charset.StandardCharsets.UTF_8)); }
-            catch (RuntimeException e) { o = null; }
-            equipTable = o instanceof Map ? EquipTable.parse(Json.obj(java.util.Collections.singletonMap("x", o), "x")) : null;
-        }
-        return equipTable;
-    }
-
     /** Reads atlas/index.json at most every ATLAS_RETRY_MS until it parses. */
     void loadAtlas() {
         if (atlas != null) return;
@@ -922,10 +858,10 @@ public class MainActivity extends Activity {
         atlasCheckedMono = now;
         File f = new File(atlasDir, "index.json");
         if (!f.isFile()) { atlasProblem = "map atlas not installed on this device"; return; }
-        byte[] data = readBytes(f, Atlas.MAX_INDEX_BYTES);
+        byte[] data = DataFiles.readBytes(f, Atlas.MAX_INDEX_BYTES);
         atlas = data == null ? null : Atlas.parse(new String(data, StandardCharsets.UTF_8));
         if (atlas == null) { atlasProblem = "map atlas index unreadable"; return; }
-        byte[] reg = readBytes(new File(atlasDir, "regions.json"), Regions.MAX_BYTES);
+        byte[] reg = DataFiles.readBytes(new File(atlasDir, "regions.json"), Regions.MAX_BYTES);
         regions = reg == null ? null : Regions.parse(new String(reg, StandardCharsets.UTF_8));
     }
 
@@ -937,9 +873,9 @@ public class MainActivity extends Activity {
         Bitmap cached = masks.get(sh.file);
         if (cached != null) return cached;
         maskProblem = null;
-        byte[] data = readBytes(new File(atlasDir, sh.file), MAX_MASK_BYTES);
+        byte[] data = DataFiles.readBytes(new File(atlasDir, sh.file), MAX_MASK_BYTES);
         if (data == null) { maskProblem = "map image missing from the atlas"; return null; }
-        if (!sh.sha256.equals(sha256(data))) { maskProblem = "map image does not match the atlas index"; return null; }
+        if (!sh.sha256.equals(DataFiles.sha256(data))) { maskProblem = "map image does not match the atlas index"; return null; }
         BitmapFactory.Options o = new BitmapFactory.Options();
         o.inSampleSize = MASK_SAMPLE;
         Bitmap b = BitmapFactory.decodeByteArray(data, 0, data.length, o);
@@ -949,129 +885,5 @@ public class MainActivity extends Activity {
         }
         masks.put(sh.file, b);
         return b;
-    }
-
-    static byte[] readBytes(File f, int max) {
-        if (!f.isFile() || f.length() > max) return null;
-        try (FileInputStream in = new FileInputStream(f)) {
-            byte[] buf = new byte[(int) f.length()];
-            int n = 0, r;
-            while (n < buf.length && (r = in.read(buf, n, buf.length - n)) > 0) n += r;
-            return n == buf.length ? buf : null;
-        } catch (IOException e) {
-            return null;
-        }
-    }
-
-    static String sha256(byte[] data) {
-        try {
-            StringBuilder b = new StringBuilder();
-            for (byte x : MessageDigest.getInstance("SHA-256").digest(data)) b.append(String.format("%02x", x));
-            return b.toString();
-        } catch (java.security.NoSuchAlgorithmException e) {
-            return "";
-        }
-    }
-
-    static String areaName(Map<String, Object> m, String key) {
-        return Place.name(Json.lng(m, key));
-    }
-
-    void showSession(Snapshot s, Map<String, Object> hello) {
-        StringBuilder b = new StringBuilder();
-        if (hello != null) {
-            String lua = Json.str(Json.obj(hello, "loader"), "lua");
-            if (lua != null && lua.startsWith("sol.")) lua = "1.7.x";  // v0.3.0 printed the version object itself
-            b.append("Lua Loader: ").append(lua == null || lua.isEmpty() ? "?" : lua).append('\n');
-            String p = Json.str(Json.obj(hello, "producer"), "version");
-            if (p != null) b.append("Script: ").append(p).append('\n');
-        }
-        if (s.clockUs != null) {
-            long us = s.clockUs;
-            b.append("Game clock: ").append(us / 3_600_000_000L).append("h ").append((us / 60_000_000L) % 60).append("m\n");
-        }
-        b.append("Snapshot #").append(s.seq);
-        session.setText(b);
-    }
-
-    void showBuild(Map<String, Object> hello) {
-        Map<String, Object> bi = Json.obj(hello, "build");
-        if (bi == null) { build.setText("—"); return; }
-        StringBuilder b = new StringBuilder();
-        b.append(Boolean.TRUE.equals(Json.bool(bi, "exeLengthSupported")) ? "Supported Steam exe" : "Unknown exe size").append('\n');
-        b.append(Json.obj(bi, "pe") != null ? "Image at 0x120000 (verified)" : "PE header not readable").append('\n');
-        Map<String, Object> patches = Json.obj(bi, "patches");
-        if (patches != null) {
-            String gn = Json.str(patches, "gn.595520.displaymodes");
-            b.append("GameNative display fix: ").append(gn != null ? gn : "?");
-        }
-        build.setText(b);
-    }
-
-    void showMods(Map<String, Object> hello) {
-        List<Object> arr = Json.arr(hello, "mods");
-        if (arr == null) { mods.setText("—"); return; }
-        StringBuilder b = new StringBuilder();
-        for (Object m : arr) {
-            Map<String, Object> fp = Json.obj(m, "file_present");
-            if (fp == null || !Boolean.TRUE.equals(Json.bool(fp, "value"))) continue;  // only list what is installed
-            b.append("• ").append(prettyMod(Json.str(m, "id")));
-            if (Json.obj(m, "config_observed") != null) b.append("  (config)");
-            b.append('\n');
-        }
-        mods.setText(b.length() == 0 ? "None found" : b.toString().trim());
-    }
-
-    void showCaps(Map<String, Object> hello) {
-        Map<String, Object> c = Json.obj(hello, "capabilities");
-        if (c == null) { caps.setText("—"); return; }
-        StringBuilder on = new StringBuilder(), off = new StringBuilder();
-        for (Map.Entry<String, Object> e : c.entrySet()) {
-            String k = e.getKey();
-            // The producer may claim party data before this app accepts it (ReceiverState.LIVE_PARTY_ENABLED).
-            if ("party".equals(k) && !"off".equals(e.getValue()) && !ReceiverState.LIVE_PARTY_ENABLED) k = "party (not enabled in this app)";
-            ("off".equals(e.getValue()) || k.startsWith("party (") ? off : on).append(k).append("  ");
-        }
-        String text = "Available: " + (on.length() == 0 ? "none" : on.toString().trim());
-        if (off.length() > 0) text += "\nNot yet: " + off.toString().trim();
-        caps.setText(text);
-    }
-
-    static String prettyMod(String id) {
-        if (id == null) return "?";
-        switch (id) {
-            case "insurgents.manifesto": return "The Insurgent's Manifesto";
-            case "insurgents.companions": return "The Insurgent's Companions";
-            case "insurgents.vision": return "The Insurgent's Vision";
-            case "insurgents.bundle": return "The Insurgent's Bountiful Bundle";
-            case "insurgents.descinv": return "The Insurgent's Descriptive Inventory";
-            case "fehdead.dynequipdesc": return "Dynamic Equipment Description";
-            case "lpc.foedexprimer": return "Foedex Clan Primer Text Replacer";
-            case "ffgriever.efl": return "External File Loader";
-            case "ffgriever.lualoader": return "Lua Script Loader";
-            case "ffgriever.tkmalloc": return "tkmalloc";
-            case "dualwield.vaan": return "Dual Wield";
-            default: return id;
-        }
-    }
-
-    @SuppressWarnings("unchecked")
-    static Map<String, Object> asMap(Object o) {
-        return o instanceof Map ? (Map<String, Object>) o : null;
-    }
-
-    static String shortId(String session) {
-        return session == null ? "—" : session.substring(0, 8);
-    }
-
-    static String secs(long ms) {
-        long s = Math.max(0, ms / 1000);
-        if (s < 60) return s + "s";
-        if (s < 3600) return (s / 60) + "m";
-        return (s / 3600) + "h " + ((s / 60) % 60) + "m";
-    }
-
-    static String ago(long ms) {
-        return secs(ms) + " ago";
     }
 }

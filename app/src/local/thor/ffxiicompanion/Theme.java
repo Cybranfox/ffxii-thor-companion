@@ -72,8 +72,24 @@ final class Theme {
         return d;
     }
 
-    /** Stop animating drawables whose views are gone (called when a screen rebuilds its rows). */
-    static void forget(Drawable d) { live.remove(d); }
+    /** Rounded background in the app's style: PANEL gets the panel, ACCENT the animated highlight, anything else a flat fill. */
+    static Drawable fill(int color, float radiusPx, float unitPx) {
+        if (color == PANEL) return panel(radiusPx, unitPx);
+        if (color == ACCENT) return selected(radiusPx, unitPx);
+        GradientDrawable g = new GradientDrawable();
+        g.setColor(color);
+        g.setCornerRadius(radiusPx);
+        return g;
+    }
+
+    static android.widget.TextView label(android.content.Context c, String s, int sp, int color, boolean bold) {
+        android.widget.TextView t = new android.widget.TextView(c);
+        t.setText(s);
+        t.setTextSize(sp);
+        t.setTextColor(color);
+        if (bold) t.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+        return t;
+    }
 
     static final class Selected extends Drawable {
         private final Paint bar = new Paint(Paint.ANTI_ALIAS_FLAG), sheen = new Paint(Paint.ANTI_ALIAS_FLAG),

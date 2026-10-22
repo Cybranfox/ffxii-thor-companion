@@ -1,8 +1,6 @@
 package local.thor.ffxiicompanion;
 
 import android.content.Context;
-import android.graphics.Typeface;
-import android.graphics.drawable.GradientDrawable;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.widget.HorizontalScrollView;
@@ -743,22 +741,11 @@ final class GambitsView extends LinearLayout {
     }
 
     private TextView tv(String s, int sp, int color, boolean bold) {
-        TextView t = new TextView(getContext());
-        t.setText(s);
-        t.setTextSize(sp);
-        t.setTextColor(color);
-        if (bold) t.setTypeface(Typeface.DEFAULT_BOLD);
-        return t;
+        return Theme.label(getContext(), s, sp, color, bold);
     }
 
-    /** 0.21.0: panels (card) and highlights (accent) use the FFXII-style Theme drawables. */
     private android.graphics.drawable.Drawable round(int color, int radiusDp) {
-        if (color == card) return Theme.panel(dp(radiusDp), dp(1));
-        if (color == accent) return Theme.selected(dp(radiusDp), dp(1));
-        GradientDrawable g = new GradientDrawable();
-        g.setColor(color);
-        g.setCornerRadius(dp(radiusDp));
-        return g;
+        return Theme.fill(color, dp(radiusDp), dp(1));
     }
 
     private int dp(int v) { return Math.round(v * density); }

@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- Code tidy-up, no changes you should notice: file reading and the Details panel text moved out of the main screen
+  into their own small classes (with tests), the three views share one set of text/background helpers, and a few
+  unused bits are gone.
+
 ## 0.11.0-beta
 - **Updates install themselves.** Run `install.cmd` one last time and it puts a small loader in the game. After that,
   installing a new APK is the whole update: the loader picks up the new game script at the next game start.
