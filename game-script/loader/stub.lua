@@ -72,7 +72,7 @@ end
 local function jsonString(s) return '"' .. s_gsub(tostring_(s), '[%c"\\]', function(c) return s_format("\\u%04x", s_byte(c)) end) .. '"' end
 local function writeStatus(t)
   local parts = {}
-  for _, k in ipairs({ "contract", "stub", "result", "version", "sequence", "keyId", "epoch", "detail", "wallTime" }) do
+  for _, k in ipairs({ "contract", "stub", "result", "version", "sequence", "keyId", "epoch", "verifyMs", "detail", "wallTime" }) do
     local v = t[k]
     if v ~= nil then parts[#parts + 1] = jsonString(k) .. ":" .. (type_(v) == "number" and s_format("%d", v) or jsonString(v)) end
   end
@@ -230,9 +230,11 @@ local function run()
   if not seq or not minStub or length ~= #core then return status("bad_format", { detail = "envelope_values" }) end
   if kid ~= s_sub(policy.release_key, 1, 16) then return status("unknown_key", { version = version, epoch = policy.epoch }) end
   local header = s_sub(packet, 1, #packet - 129)
+  local t0 = os.clock()
   if not verify.verify(hexbytes(policy.release_key), header .. core, hexbytes(sig)) then
     return status("tampered", { version = version, epoch = policy.epoch })
   end
+  local verifyMs = math.floor((os.clock() - t0) * 1000 + 0.5)   --CPU time of the signature check, for the record
   if minStub > STUB_VERSION then return status("stub_old", { version = version, sequence = seq }) end
 
   --5. Never go backwards; the same sequence must be the very same signed release.
@@ -251,7 +253,7 @@ local function run()
     if not saveJournal(journal, j) then return status("state_unwritable", { detail = "journal" }) end
   end
 
-  status("ok", { version = version, sequence = seq, keyId = kid, epoch = policy.epoch })
+  status("ok", { version = version, sequence = seq, keyId = kid, epoch = policy.epoch, verifyMs = verifyMs })
   local ok = xpcall_(chunk, function(e) return s_sub(tostring_(e), 1, 300) end)
   if not ok then status("core_failed", { version = version, sequence = seq }) end
 end

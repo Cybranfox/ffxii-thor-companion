@@ -175,7 +175,8 @@ def main():
     status_text = Thor(stub)
     status_text.put_core(rel, core_text('m'), 9)
     st, _, _ = status_text.start()
-    check(set(st) <= {'contract', 'stub', 'result', 'version', 'sequence', 'keyId', 'epoch', 'detail', 'wallTime'}
+    check(set(st) <= {'contract', 'stub', 'result', 'version', 'sequence', 'keyId', 'epoch', 'verifyMs', 'detail', 'wallTime'}
+          and isinstance(st.get('verifyMs'), int)
           and st['contract'] == 'ffxii.loader.v1' and st['stub'] == 1, 'status receipt has only the fixed fields')
     print(f'{ok}/{ok} PASS. Signed loader stub; throwaway keys; simulated files; the stub never touched game memory.')
 
