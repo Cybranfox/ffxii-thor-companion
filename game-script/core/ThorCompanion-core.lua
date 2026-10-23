@@ -1378,6 +1378,40 @@ local HANDLE_MGR, HANDLE_MGR_STRIDE, TARGET_GATE, LEADER_OFF = 0x2098E10, 0x288,
 
 local function nonNull(a) local v = memory.u64[a]; return v ~= 0 and v or nil end
 
+--0.13.0 (performance): every read is a call into the loader, and on the Thor each runs under x86 emulation inside the
+--game's frame. Scanning the whole actor pool every poll (up to ACTOR_MAX x 2) made frames uneven. Each member's slot
+--in the pool is remembered and only re-checked (one read per member); the pool is scanned again only when a member
+--is missing or moved, at most every RESCAN_MS.
+local RESCAN_MS = 5000
+local cache = { base = nil, n = nil, slot = {} }   -- member id -> pool index
+local lastScanClock
+
+local function memberActors(byRecord)
+  local base, n = nonNull(ACTOR_POOL_PTR), s32(ACTOR_COUNT)
+  local actors = {}
+  if not base or n <= 0 or n > ACTOR_MAX then return actors end
+  if base ~= cache.base or n ~= cache.n then cache.base, cache.n, cache.slot = base, n, {} end
+  local missing = false
+  for record, id in pairs(byRecord) do
+    local i = cache.slot[id]
+    if i and i < n and memory.u64[base + i * ACTOR_STRIDE + 0x698] == record then
+      actors[id] = base + i * ACTOR_STRIDE
+    else
+      missing = true
+    end
+  end
+  local now = safeCall(event.getClock) or 0
+  if missing and (not lastScanClock or now - lastScanClock >= RESCAN_MS * 1000) then
+    lastScanClock = now
+    for i = 0, n - 1 do
+      local a = base + i * ACTOR_STRIDE
+      local id = byRecord[memory.u64[a + 0x698]]
+      if id and not actors[id] then actors[id] = a; cache.slot[id] = i end
+    end
+  end
+  return actors
+end
+
 local function resolveHandle(h)
   if h == 0 then return nil end
   local class, index, gen = (h >> 16) & 0xF, h & 0xFFFF, (h >> 20) & 0x7FF
@@ -1427,14 +1461,7 @@ local function readTargets()
       members[#members + 1] = id
     end
   end
-  local actors, base, n = {}, nonNull(ACTOR_POOL_PTR), s32(ACTOR_COUNT)
-  if base and n > 0 and n <= ACTOR_MAX then
-    for i = 0, n - 1 do
-      local a = base + i * ACTOR_STRIDE
-      local id = byRecord[memory.u64[a + 0x698]]
-      if id and not actors[id] then actors[id] = a end
-    end
-  end
+  local actors = memberActors(byRecord)
   local gate = (memory.u8[TARGET_GATE] & 0x10) ~= 0
   local leader = memory.u8[GAMBIT_BASE + LEADER_OFF]
   local out = {}
@@ -1481,9 +1508,10 @@ local flagsState = (function()
 local FLAGS_AT, FLAGS_BYTES, SCRIPT_GATE, SCENARIO_PTR, EXIT_PTR = 0x2165974, 64, 0x2098E20, 0x2098E58, 0x2098E10
 
 local function readFlags()
-  local hex = {}
-  for i = 0, FLAGS_BYTES - 1 do hex[#hex + 1] = string.format("%02x", memory.u8[FLAGS_AT + i]) end
-  local r = { generic = table.concat(hex), scenario = 0, currentExit = -1 }
+  local raw = {}                                   --16 reads of 4 bytes, not 64 of 1 (see RESCAN_MS above); u32
+  for i = 0, FLAGS_BYTES - 4, 4 do raw[#raw + 1] = string.pack("<I4", memory.u32[FLAGS_AT + i]) end   --stays exact
+  local generic = table.concat(raw):gsub(".", function(c) return string.format("%02x", c:byte()) end)
+  local r = { generic = generic, scenario = 0, currentExit = -1 }
   if (memory.u8[SCRIPT_GATE] & 1) ~= 0 then
     local s = memory.u64[SCENARIO_PTR]
     if s ~= 0 then r.scenario = memory.u16[s] end

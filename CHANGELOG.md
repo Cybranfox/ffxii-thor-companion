@@ -13,6 +13,9 @@
   game's code says for certain which symbol means what.
 - **Locked exits are greyed out**, like on the game's map, until the story opens them.
 - Game script: shares the game's story flags (read-only) so the app can do the two things above.
+- Kept the game script light: it remembers where your party is in the game's actor list instead of searching the whole
+  list twice a second, and reads the story flags in a few large reads. (An early 0.13 test build made the frame rate
+  jump between 30 and 60; this is the fix.)
 - **Re-run the data builder once** for the symbols.
 - Fixed: at the title screen the game script could treat leftover memory as a loaded save (the party card showed
   "invalid" HP for a moment). It now also checks the game's own "save loaded" marker before reading anything.
