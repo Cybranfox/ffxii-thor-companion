@@ -114,6 +114,14 @@ public class MainActivity extends Activity {
             new DataFiles.Cached<>(new File(dir, "licence_nodes.json"), LicenceNodes.MAX_BYTES, LicenceNodes::parse);
     final DataFiles.Cached<EquipTable> equipTable =
             new DataFiles.Cached<>(new File(dir, "equipment.json"), 256 * 1024, EquipTable::parse);
+    /** 0.14.0: the story hint and hunt journal from the data pack (reference/objectives.json). */
+    final DataFiles.Cached<Objectives> objectives =
+            new DataFiles.Cached<>(new File(REFERENCE_DIR, "objectives.json"), Objectives.MAX_BYTES, Objectives::parse);
+    /** 0.14.0 map options, remembered on the device: symbols and story hint on, hunts off by default (spoilers). */
+    static final String OPT_SYMBOLS = "symbols", OPT_HINT = "hint", OPT_HUNTS = "hunts";
+    TextView hintLine, huntsNote;
+    LinearLayout huntsCard, huntsRows, optionsRow;
+    Map<Integer, Bitmap> symbolArt;
     /** Synthetic test data is only accepted by the JVM tests; the app itself always treats it as untrusted. */
     final boolean fixtureMode = false;
     ReceiverState state;
@@ -266,6 +274,12 @@ public class MainActivity extends Activity {
         location.setMaxLines(3);
         location.setEllipsize(TextUtils.TruncateAt.END);
         locationCard.addView(location);
+        hintLine = text("", 13, Theme.GOLD, false);     // 0.14.0: the game's own "where to go next" line
+        hintLine.setMaxLines(3);
+        hintLine.setEllipsize(TextUtils.TruncateAt.END);
+        hintLine.setPadding(0, dp(3), 0, 0);
+        hintLine.setVisibility(View.GONE);
+        locationCard.addView(hintLine);
         body.addView(locationCard, cardParams(-1, 0));
 
         // Targeting (0.13.0): the enemy the party's pending actions are aimed at; only shown while there is one.
@@ -316,6 +330,17 @@ public class MainActivity extends Activity {
         partyCard.addView(partyRow);
         body.addView(partyCard, cardParams(-1, 0));
 
+        // Hunts (0.14.0, off by default): the game's own journal text for hunts you have accepted.
+        huntsCard = cardShell();
+        huntsCard.addView(cardHeading("HUNTS"));
+        huntsNote = text("", 13, DIM, false);
+        huntsCard.addView(huntsNote);
+        huntsRows = new LinearLayout(this);
+        huntsRows.setOrientation(LinearLayout.VERTICAL);
+        huntsCard.addView(huntsRows);
+        huntsCard.setVisibility(View.GONE);
+        body.addView(huntsCard, cardParams(-1, 0));
+
         // Secondary diagnostics: collapsed by default, one tap to open (touch only; the window stays non-focusable).
         detailsToggle = text("", 13, ACCENT, true);
         detailsToggle.setPadding(dp(8), dp(8), dp(8), dp(8));
@@ -360,6 +385,24 @@ public class MainActivity extends Activity {
         clp.leftMargin = dp(8);
         head.addView(close, clp);
         mapPage.addView(head);
+        optionsRow = new LinearLayout(this);              // 0.14.0: map options, remembered
+        optionsRow.setPadding(0, dp(4), 0, 0);
+        for (String[] o : new String[][] {{OPT_SYMBOLS, "Symbols"}, {OPT_HINT, "Story hint"}, {OPT_HUNTS, "Hunts"}}) {
+            TextView chip = pageButton("");
+            chip.setTextSize(12);
+            chip.setTag(o[0]);
+            chip.setOnClickListener(x -> {
+                setOption(o[0], !option(o[0]));
+                styleOptions();
+                applySymbolOption();
+                if (lastView != null) render(lastView);
+            });
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-2, -2);
+            lp.rightMargin = dp(8);
+            optionsRow.addView(chip, lp);
+        }
+        mapPage.addView(optionsRow);
+        styleOptions();
         bigMap = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK, TEXT, BG, 12, true);
         bigMap.setOnMoved(moved -> mapRecentre.setVisibility(moved ? View.VISIBLE : View.GONE));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, 0, 1);
@@ -370,6 +413,68 @@ public class MainActivity extends Activity {
         mapPageNote.setPadding(0, dp(3), 0, 0);
         mapPage.addView(mapPageNote);
         return mapPage;
+    }
+
+    boolean option(String key) {
+        return getSharedPreferences("options", MODE_PRIVATE).getBoolean(key, !OPT_HUNTS.equals(key));
+    }
+
+    void setOption(String key, boolean on) {
+        getSharedPreferences("options", MODE_PRIVATE).edit().putBoolean(key, on).apply();
+    }
+
+    void styleOptions() {
+        String[] names = {"Symbols", "Story hint", "Hunts"};
+        for (int i = 0; i < optionsRow.getChildCount(); i++) {
+            TextView c = (TextView) optionsRow.getChildAt(i);
+            boolean on = option((String) c.getTag());
+            c.setText((on ? "\u2713 " : "") + names[i]);
+            c.setBackground(round(on ? ACCENT : CARD, 14));
+            c.setTextColor(on ? BG : DIM);
+        }
+    }
+
+    void applySymbolOption() {
+        Map<Integer, Bitmap> art = option(OPT_SYMBOLS) ? symbolArt : null;
+        mapView.setSymbolArt(art);
+        bigMap.setSymbolArt(art);
+    }
+
+    /** 0.14.0: the story hint line and the hunts card; live and verified data only, like the party. */
+    void showObjectives(ReceiverState.View v) {
+        Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
+        boolean ok = s != null && v.locationFamily.state == ReceiverState.FamilyState.LIVE
+                && (s.synthetic ? fixtureMode : Reveal.buildVerified(s.hello()));
+        Objectives o = objectives.get();
+        Flags f = ok ? Flags.parse(Json.obj(s.data, "flags")) : null;
+        String hint = o != null && option(OPT_HINT) ? o.hint(f) : null;
+        hintLine.setText(hint != null ? "Next: " + hint.replace('\n', ' ') : "");
+        hintLine.setVisibility(hint != null ? View.VISIBLE : View.GONE);
+        huntsCard.setVisibility(option(OPT_HUNTS) ? View.VISIBLE : View.GONE);
+        if (!option(OPT_HUNTS)) return;
+        huntsRows.removeAllViews();
+        List<Objectives.Entry> js = o != null && ok ? o.journal(Json.obj(s.data, "quests")) : java.util.Collections.emptyList();
+        huntsNote.setText(o == null ? "Needs the game data (run the data builder, see INSTALL)."
+                : !ok ? "Shown while the game is running." : js.isEmpty() ? "No accepted hunts yet." : "");
+        huntsNote.setVisibility(huntsNote.getText().length() == 0 ? View.GONE : View.VISIBLE);
+        for (Objectives.Entry e : js) {
+            LinearLayout r = new LinearLayout(this);
+            r.setOrientation(LinearLayout.VERTICAL);
+            r.setPadding(dp(8), dp(4), dp(8), dp(5));
+            r.setBackground(round(TRACK, 6));
+            TextView n = text(e.hunt.title != null ? e.hunt.title : "Hunt " + e.hunt.questId, 13, TEXT, true);
+            oneLine(n);
+            r.addView(n);
+            if (e.paragraph != null) {
+                TextView p = text(e.paragraph.replace('\n', ' '), 12, DIM, false);
+                p.setMaxLines(3);
+                p.setEllipsize(TextUtils.TruncateAt.END);
+                r.addView(p);
+            }
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(4);
+            huntsRows.addView(r, lp);
+        }
     }
 
     TextView pageButton(String s) {
@@ -612,6 +717,7 @@ public class MainActivity extends Activity {
         showParty(v);
         showLocation(v);
         showTarget(v);
+        showObjectives(v);
         showMap(v);
         showGambits(v);
         showGear(v);
@@ -986,9 +1092,8 @@ public class MainActivity extends Activity {
         if (atlas == null) { atlasProblem = "map atlas index unreadable"; return; }
         byte[] reg = DataFiles.readBytes(new File(atlasDir, "regions.json"), Regions.MAX_BYTES);
         regions = reg == null ? null : Regions.parse(new String(reg, StandardCharsets.UTF_8));
-        Map<Integer, Bitmap> art = regions != null ? symbolArt(regions) : null;
-        mapView.setSymbolArt(art);
-        bigMap.setSymbolArt(art);
+        symbolArt = regions != null ? symbolArt(regions) : null;
+        applySymbolOption();
     }
 
     /** 0.13.0: the map symbol pictures, each only when its sha256 matches regions.json; null when there are none. */

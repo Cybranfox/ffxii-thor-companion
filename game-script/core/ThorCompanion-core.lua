@@ -362,6 +362,7 @@ local function capabilities()
     ["party"] = "on",
     ["target"] = "probe",
     ["flags"] = "probe",
+    ["quests"] = "probe",
     ["battle"] = "probe",
     ["gambits"] = "probe",
     ["gambits.write"] = "probe",
@@ -1538,11 +1539,52 @@ return function()
 end
 end)()
 
+--0.14.0: the hunt journal's live state (read-only; Objectives_Hunts_2026-10-22.md, checked in the exe on 23 Oct). Two
+--32-byte banks the game's quest menu tests, bit (id & 7) of byte id / 8 in either one lists a quest (0x46B240 at save
+--+0x1200, 0x46B1A0 at save +0x1220; 0x37EAA0), and the stage byte of quests 128..172 (the 45 hunts) at save +0x1264 +
+--id (0x46B180). The app turns a stage into the hunt's phase with the table built from the user's files. 28 u32 reads.
+local questsState = (function()
+local BANK_A, BANK_B, STAGES, FIRST, COUNT = 0x2165480, 0x21654A0, 0x2165564, 128, 45
+
+local function hex(at, bytes)
+  local raw = {}
+  for i = 0, bytes - 1, 4 do raw[#raw + 1] = string.pack("<I4", memory.u32[at + i]) end
+  return table.concat(raw):sub(1, bytes):gsub(".", function(c) return string.format("%02x", c:byte()) end)
+end
+
+local function readQuests()
+  return { bankA = hex(BANK_A, 32), bankB = hex(BANK_B, 32), stages = hex(STAGES, COUNT) }
+end
+
+local last, lastClock                             --hunt state changes rarely: read every GAMBITS_MS, not every poll
+
+--Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
+return function()
+  local now = safeCall(event.getClock) or 0
+  if last and lastClock and now - lastClock < GAMBITS_MS * 1000 then return last end
+  lastClock = now
+  last = { contract = "ffxii.quests.v1" }
+  local r = last
+  if not supportedBuild() then r.status = "unsupported_build"; return r end
+  local okp, ptr = pcall(function() return memory.u64[GAMBIT_SAVE_PTR] end)
+  if not okp then r.status = "read_failed"; return r end
+  if ptr ~= GAMBIT_BASE or not saveLoaded() then r.status = "save_not_ready"; return r end
+  local ok1, a = pcall(readQuests)
+  local ok2, b = pcall(readQuests)
+  if not ok1 or not ok2 then r.status = "read_failed"; return r end
+  if encode(a) ~= encode(b) then r.status = "unstable"; return r end
+  r.status = "ok"
+  r.first, r.count, r.bankA, r.bankB, r.stages = FIRST, COUNT, a.bankA, a.bankB, a.stages
+  return r
+end
+end)()
+
 local function addReveal(data)
   if data.map then
     data.party = partyState()
     data.target = targetState()
     data.flags = flagsState()
+    data.quests = questsState()
     --sampled just now, as this snapshot is built: stamp it with the snapshot's own clock (the receiver's freshness test
     --compares the two, and a later stamp would read as "time unknown")
     if data.party.status == "ok" then data.party.observedClockUs = data.session and data.session.clockUs end
@@ -1586,6 +1628,8 @@ local function writeSnapshot(force)
                           data.target and data.target.status, data.target and encode(data.target.members),
                           data.flags and data.flags.status, data.flags and data.flags.generic,
                           data.flags and data.flags.scenario, data.flags and data.flags.currentExit,
+                          data.quests and data.quests.status, data.quests and data.quests.bankA,
+                          data.quests and data.quests.bankB, data.quests and data.quests.stages,
                           data.battle and data.battle.status, data.battle and data.battle.flags,
                           data.battle and data.battle.changes))
   local now = safeCall(event.getClock) or 0

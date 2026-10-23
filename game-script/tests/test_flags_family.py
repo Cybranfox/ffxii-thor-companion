@@ -31,6 +31,9 @@ def world(gate=1, scen_ptr=True, exit_ptr=True, marker=True):
     put(mem, SCEN, struct.pack('<H', 4100))
     put(mem, 0x2098E10, (EXITP if exit_ptr else 0).to_bytes(8, 'little'))
     put(mem, EXITP + 0x7E, struct.pack('<h', 3))
+    put(mem, 0x2165480 + 130 // 8, bytes([1 << (130 & 7)]))
+    put(mem, 0x2165564, bytes((i * 7) & 0xFF for i in range(45)))
+    put(mem, 0x2165564 + 45, bytes([0xAA, 0xBB, 0xCC]))   # past the 45 hunts: never published
     if not marker:
         put(mem, GB, bytes(4))
     s, _ = run(mem)
@@ -58,7 +61,17 @@ def main():
     assert world(marker=False)['flags'] == {'contract': 'ffxii.flags.v1', 'status': 'save_not_ready'}
     ok += 1
     print('PASS no save marker -> save_not_ready, nothing read')
-    print(f'{ok}/3 PASS. Story flags on synthetic memory; stubs only, no writes.')
+
+    q = world()['quests']
+    a, b = bytearray(32), bytearray(32)
+    a[130 // 8] |= 1 << (130 & 7)                 # hunt 130 listed by bank A
+    stages = bytes((i * 7) & 0xFF for i in range(45))
+    assert q == {'contract': 'ffxii.quests.v1', 'status': 'ok', 'first': 128, 'count': 45,
+                 'bankA': a.hex(), 'bankB': b.hex(), 'stages': stages.hex()}, q
+    assert world(marker=False)['quests'] == {'contract': 'ffxii.quests.v1', 'status': 'save_not_ready'}
+    ok += 1
+    print('PASS quests: both menu banks (32 bytes each) and the 45 hunt stage bytes, exactly; nothing without a save')
+    print(f'{ok}/4 PASS. Story flags and hunt state on synthetic memory; stubs only, no writes.')
 
 
 if __name__ == '__main__':

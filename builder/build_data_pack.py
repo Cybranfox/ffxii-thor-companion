@@ -88,6 +88,18 @@ def build(game, out, with_map=True, log=print):
     write_json(pack / 'reference' / 'reference.json', ref)
     write_json(pack / 'reference' / 'boards.json', v['boards'])
     write_json(pack / 'reference' / 'areas.json', {'format': 'ffxii-companion-areas-1', 'names': v['areas']})
+    objectives = None                          # 0.14.0: story hint + hunt journal (optional: skipped if unreadable)
+    try:
+        import objectives_pack
+        import vbf_extract
+        f, index, blocks = vbf_extract.open_vbf(str(game / 'FFXII_TZA.vbf'))
+        try:
+            objectives = objectives_pack.build(lambda p: vbf_extract.extract(f, index[p], blocks))
+        finally:
+            f.close()
+        write_json(pack / 'reference' / 'objectives.json', objectives)
+    except (KeyError, ValueError, OSError) as e:
+        log(f'Story hint and hunts skipped: {e}')
     atlas = 0
     if with_map:
         import mapatlas_pack
@@ -106,6 +118,8 @@ def build(game, out, with_map=True, log=print):
             'licenceBoards': len(v['boards']['boards']), 'areas': len(v['areas']), 'mapSheets': atlas,
             'gearDescriptions': sum(1 for g in ref['gear'] if g.get('lines')),
             'bestiary': len(ref['bestiary']), 'tips': len(ref['tips']),
+            'storyHints': len(objectives['hints']) if objectives else 0,
+            'hunts': len(objectives['hunts']) if objectives else 0,
         },
         'optionalMods': {
             'Dynamic Equipment Description / Descriptive Inventory (gear descriptions)': 'gear' in mods['sources'],

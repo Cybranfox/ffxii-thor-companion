@@ -169,6 +169,7 @@ def main():
     run([sys.executable, '-B', '-c', 'import sys; sys.path.insert(0, "builder"); import build_data_pack'])
     run([sys.executable, '-B', 'builder/tests/test_menumap_names.py'])
     run([sys.executable, '-B', 'builder/tests/test_menumap_icons.py'])
+    run([sys.executable, '-B', 'builder/tests/test_objectives_pack.py'])
     sdir, req = prepare_signing(a.version)
     if not (sdir / 'ThorCompanion-core.sig').exists():
         print(f"\nReady to sign the game script for {a.version}: sequence {req['sequence']}, SHA-256 {req['sha256']}"

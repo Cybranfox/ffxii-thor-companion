@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.14.0-beta
+- **Story hint.** The Location card shows the game's own "where to go next" line, the one at the bottom of the
+  game's map screen, picked the same way the game picks it from your story progress. Text only: the game's files
+  don't say where on the map the place is, so there's no pin.
+- **Hunt journal (off by default).** Turn on Hunts and the Status page lists the hunts you've accepted, with the
+  game's own journal text for where you are in each one. Only hunts the game's own menu would list, so no spoilers.
+  No map pins for hunts either: the game's files don't hold their locations.
+- **Map options.** On the full map: Symbols, Story hint and Hunts switches. The app remembers your choice.
+- Game script: shares the hunt progress the game's own menu uses (read-only, every 2 seconds).
+- **Re-run the data builder once** for the hint and the hunt journal. Everything comes from your own game files.
+
 ## 0.13.0-beta
 - **Targeting card.** When your party is about to act on an enemy, the Status page shows it: name (from your data
   pack's bestiary), level, HP, and what it's weak to, absorbs or is immune to, live from the game, so gear and effects
