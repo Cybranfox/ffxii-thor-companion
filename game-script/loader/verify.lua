@@ -3,8 +3,9 @@
 -- Original research prototype by OpenAI Codex for this project. See LICENSE.txt.
 -- Algorithm references: RFC8032, FIPS180-4; no third-party source copied.
 -- NOT independently audited. Verification only; variable-time, public operands.
-assert(_VERSION == 'Lua 5.4' and math.maxinteger == 0x7fffffffffffffff,
-       'requires Lua 5.4 with 64-bit integers')
+-- Lua 5.4 (LUA Script Loader 1.7.1) or 5.5 (2.0.1); both are tested (game-script/tests/test_verify.py runs both).
+assert((_VERSION == 'Lua 5.4' or _VERSION == 'Lua 5.5') and math.maxinteger == 0x7fffffffffffffff,
+       'requires Lua 5.4 or 5.5 with 64-bit integers')
 local M = {}
 local K = {
 0x428a2f98d728ae22,0x7137449123ef65cd,0xb5c0fbcfec4d3b2f,0xe9b5dba58189dbbc,

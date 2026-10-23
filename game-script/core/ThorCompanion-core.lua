@@ -9,7 +9,7 @@
 --Protocol: docs/PROTOCOL.md. History: CHANGELOG.md.
 
 local PROTOCOL = 1
-local PRODUCER = { name = "ThorCompanion-lua", version = "0.14.0-beta" }
+local PRODUCER = { name = "ThorCompanion-lua", version = "0.15.0-beta" }
 
 --Under GameNative on the AYN Thor, Wine drive D: is /sdcard/Download, so this is Download/FFXII_companion on the device.
 local BASE_DIR = "D:/FFXII_companion/"
@@ -1579,6 +1579,267 @@ return function()
 end
 end)()
 
+--Raw copy (0.15.0, Broker_Plan_2026-10-23.md): so the app can build the data pack itself, with no PC step. Off until
+--the app drops a request file. Copies the game files it lists, unchanged, to <BASE_DIR>raw/<job>/, 4 KiB per 50 ms
+--tick; the app does all parsing, inflating and checking. Read-only on game files (opened "rb"); writes only under raw/.
+--Never reads game memory. Pauses in fights (battle.candidate) and while the app's heartbeat (raw/alive.txt, the app's
+--os time) is older than ALIVE_S. Every entry is re-checked against the archive's own directory before copying; any
+--mismatch or I/O error stops the job with a reason until the app writes a new request (new job id).
+--Request (<= 40 KiB, LF lines): contract=ffxii.rawcopy.v1 / job=<id> / then up to MAX_ITEMS of
+--  item=header                                      the archive's SRYK header (its own length field, <= 64 MiB)
+--  item=entry <ordinal> <storedBytes> <name>        one directory entry's stored (compressed) blocks
+--  item=config <n>                                  one of CONFIGS[n] (x64-relative), whole file, <= 4 MiB
+--Output: raw/<job>/NNN.bin per item (NNN = item number), raw/<job>/receipts.txt ("NNN bytes" per finished item),
+--raw/<job>/cursor.txt (resume point), raw/<job>/done.txt or raw/<job>/error.txt. Progress in data.rawcopy.
+local rawCopy = (function()
+local RAW_DIR = BASE_DIR .. "raw/"
+local REQUEST = RAW_DIR .. "request.txt"
+local ALIVE = RAW_DIR .. "alive.txt"
+local CONTRACT = "ffxii.rawcopy.v1"
+local SOURCES = { "A:/FFXII_TZA.vbf", "../FFXII_TZA.vbf" }          --GameNative maps the game root to A:; x64 is cwd
+local CONFIGS = {
+  "scripts/config/TheInsurgentsDescriptiveInventoryConfig/us.lua",
+  "scripts/config/FoedexClanPrimerTextReplacerConfig/Bestiary/us.lua",
+  "scripts/config/FoedexClanPrimerTextReplacerConfig/TravelersTips/us.lua",
+}
+local TICK_MS, SLICE, CURSOR_EVERY = 50, 4096, 16
+local MAX_REQUEST, MAX_ITEMS, MAX_HEADER, MAX_ENTRY, MAX_CONFIG = 40 << 10, 128, 64 << 20, 64 << 20, 4 << 20
+local CHECK_EVERY_S, ALIVE_S = 2, 30
+
+local st = { contract = CONTRACT, status = "idle" }   --published as data.rawcopy
+local job                                             --{ id, items, dir }
+local cur                                             --current item: { n, src, dst, size, off, from }
+local running, stopped, lastCheck = false, false, 0
+
+local function readSmall(path, cap)
+  local f = io.open(path, "rb")
+  if not f then return nil end
+  local s = f:read(cap + 1)
+  f:close()
+  if not s or #s > cap then return nil end
+  return s
+end
+
+local function writeSmall(path, text)
+  local f = io.open(path, "wb")
+  if not f then return false end
+  local ok = f:write(text)
+  f:close()
+  return ok ~= nil
+end
+
+local function closeCur()
+  if cur then
+    if cur.src then pcall(cur.src.close, cur.src) end
+    if cur.dst then pcall(cur.dst.close, cur.dst) end
+  end
+  cur = nil
+end
+
+local function fail(reason)
+  closeCur()
+  st.status, st.error = "error", reason
+  if job then writeSmall(job.dir .. "error.txt", reason .. "\n") end
+  running = false
+end
+
+local function openArchive()
+  for _, p in ipairs(SOURCES) do
+    local f = io.open(p, "rb")
+    if f then return f end
+  end
+  return nil
+end
+
+local function u32(s, i) return string.unpack("<I4", s, i) end
+local function u64(s, i) return string.unpack("<I8", s, i) end
+
+--Directory row + block codes for one entry, read from the archive itself. Returns stored offset, stored length, name.
+local function locate(f, ordinal)
+  f:seek("set", 0)
+  local pre = f:read(16)
+  if not pre or #pre ~= 16 or pre:sub(1, 4) ~= "SRYK" then return nil, "not_sryk" end
+  local hlen, n = u32(pre, 5), u64(pre, 9)
+  if n <= 0 or n > 500000 or hlen > MAX_HEADER or ordinal < 0 or ordinal >= n then return nil, "directory" end
+  f:seek("set", 16 + 16 * n + 32 * ordinal)
+  local row = f:read(32)
+  if not row or #row ~= 32 then return nil, "directory" end
+  local first, size, off, nameOff = u32(row, 1), u64(row, 9), u64(row, 17), u64(row, 25)
+  f:seek("set", 16 + 48 * n)
+  local nl = f:read(4)
+  if not nl or #nl ~= 4 then return nil, "directory" end
+  local namesLen = u32(nl, 1)
+  if namesLen < 4 or nameOff >= namesLen - 4 or size <= 0 or size > MAX_ENTRY then return nil, "directory" end
+  f:seek("set", 16 + 48 * n + 4 + nameOff)
+  local raw = f:read(math.min(1024, namesLen - 4 - nameOff)) or ""
+  local name = raw:match("^([^%z]*)%z")
+  if not name then return nil, "name" end
+  local blocks = (size + 65535) // 65536
+  local codesAt = 16 + 48 * n + namesLen + 2 * first
+  if codesAt + 2 * blocks > hlen then return nil, "blocks" end
+  f:seek("set", codesAt)
+  local codes = f:read(2 * blocks)
+  if not codes or #codes ~= 2 * blocks then return nil, "blocks" end
+  local stored = 0
+  for i = 1, 2 * blocks, 2 do
+    local c = string.unpack("<I2", codes, i)
+    stored = stored + (c == 0 and 65536 or c)
+  end
+  return off, stored, name
+end
+
+local function parseRequest(text)
+  if not text or #text > MAX_REQUEST then return nil, "request_size" end
+  local id, items, contract = nil, {}, nil
+  for line in text:gmatch("[^\n]+") do
+    local k, v = line:match("^(%a+)=(.*)$")
+    if k == "contract" and not contract then contract = v
+    elseif k == "job" and not id then
+      if not v:match("^[%w_%-]+$") or #v > 32 then return nil, "job_id" end
+      id = v
+    elseif k == "item" then
+      if #items >= MAX_ITEMS then return nil, "too_many_items" end
+      if v == "header" then items[#items + 1] = { kind = "header" }
+      else
+        local o, b, nm = v:match("^entry (%d+) (%d+) ([%w_/%.%-]+)$")
+        local c = v:match("^config (%d)$")
+        if o and #o <= 7 and #b <= 9 and #nm <= 255 and not nm:find("..", 1, true) then   --a name, never a path
+          items[#items + 1] = { kind = "entry", ordinal = tonumber(o), bytes = tonumber(b), name = nm }
+        elseif c and CONFIGS[tonumber(c)] then items[#items + 1] = { kind = "config", path = CONFIGS[tonumber(c)] }
+        else return nil, "item" end
+      end
+    else return nil, "line" end
+  end
+  if contract ~= CONTRACT or not id or #items == 0 then return nil, "request" end
+  return { id = id, items = items, dir = RAW_DIR .. id .. "/" }
+end
+
+local function itemFile(n) return string.format("%03d.bin", n) end
+
+--Opens item n for copying from byte `from` (resume) or 0.
+local function openItem(n, from)
+  local it = job.items[n]
+  local src, off, size
+  if it.kind == "config" then
+    src = io.open(it.path, "rb")
+    if not src then return fail("config_missing") end
+    size = src:seek("end")
+    if not size or size > MAX_CONFIG then src:close(); return fail("config_size") end
+    off = 0
+  else
+    src = openArchive()
+    if not src then return fail("archive_missing") end
+    if it.kind == "header" then
+      src:seek("set", 0)
+      local pre = src:read(16)
+      if not pre or #pre ~= 16 or pre:sub(1, 4) ~= "SRYK" then src:close(); return fail("not_sryk") end
+      size, off = u32(pre, 5), 0
+      if size > MAX_HEADER then src:close(); return fail("header_size") end
+    else
+      local o, stored, name = locate(src, it.ordinal)
+      if not o then src:close(); return fail("entry_" .. tostring(stored)) end
+      if stored ~= it.bytes or name ~= it.name then src:close(); return fail("entry_mismatch") end
+      off, size = o, stored
+    end
+  end
+  from = (from and from >= 0 and from <= size) and from or 0
+  local path = job.dir .. itemFile(n) .. ".part"
+  local dst = from > 0 and io.open(path, "r+b") or nil
+  if dst then dst:seek("set", from) else from = 0; dst = io.open(path, "wb") end
+  if not dst then src:close(); return fail("write_open") end
+  if not src:seek("set", off + from) then src:close(); dst:close(); return fail("seek") end
+  cur = { n = n, src = src, dst = dst, size = size, off = off, from = from, slices = 0 }
+  st.item, st.items, st.bytes, st.total = n, #job.items, from, size
+  return true
+end
+
+local function finishItem()
+  local n, size = cur.n, cur.size
+  cur.dst:flush()
+  local got = cur.dst:seek("end")
+  closeCur()
+  if got ~= size then return fail("size_after_copy") end
+  local part, final = job.dir .. itemFile(n) .. ".part", job.dir .. itemFile(n)
+  os.remove(final)
+  if not os.rename(part, final) then return fail("rename") end
+  local r = io.open(job.dir .. "receipts.txt", "ab")
+  if not r then return fail("receipt") end
+  r:write(string.format("%03d %d\n", n, size))
+  r:close()
+  writeSmall(job.dir .. "cursor.txt", string.format("%d 0\n", n + 1))
+  if n == #job.items then
+    writeSmall(job.dir .. "done.txt", "done\n")
+    st.status, running = "done", false
+    return true
+  end
+  return openItem(n + 1, 0)
+end
+
+local function appAway()
+  local alive = tonumber((readSmall(ALIVE, 32) or ""):match("^(%d+)"))
+  return not alive or os.time() - alive > ALIVE_S
+end
+
+local nextAliveCheck, away = 0, false
+local function tick()
+  if stopped or not running then return end
+  local ok = pcall(function()
+    local now = os.time()
+    if now >= nextAliveCheck then away, nextAliveCheck = appAway(), now + CHECK_EVERY_S end
+    local pauseReason = battle.candidate and "fight" or (away and "app_away") or nil   --fight: checked every tick
+    st.paused = pauseReason
+    if pauseReason or not cur then return end
+    local left = cur.size - cur.from
+    local b = cur.src:read(math.min(SLICE, left))
+    if not b or #b == 0 then return fail("read") end
+    if not cur.dst:write(b) then return fail("write") end
+    cur.from = cur.from + #b
+    st.bytes = cur.from
+    cur.slices = cur.slices + 1
+    if cur.slices % CURSOR_EVERY == 0 then
+      cur.dst:flush()
+      writeSmall(job.dir .. "cursor.txt", string.format("%d %d\n", cur.n, cur.from))
+    end
+    if cur.from >= cur.size then finishItem() end
+  end)
+  if not ok then fail("tick") end
+  if running and not stopped then event.executeAfterMs(TICK_MS, tick) end
+end
+
+--Called from the 500 ms poll: looks for a (new) request at most every CHECK_EVERY_S while idle.
+local function poll()
+  if running or stopped then return end
+  local now = os.time()
+  if now - lastCheck < CHECK_EVERY_S then return end
+  lastCheck = now
+  local f = io.open(REQUEST, "rb")
+  if not f then return end
+  local text = f:read(MAX_REQUEST + 1) or ""
+  f:close()
+  local j, why = parseRequest(text)               --an oversized request is reported (request_size), not ignored
+  if not j then st.status, st.error = "error", why; return end
+  if job and job.id == j.id and st.status ~= "running" then return end   --finished or failed: wait for a new job id
+  job = j
+  st.job, st.error, st.paused = j.id, nil, nil
+  if lfs and lfs.mkdir then pcall(lfs.mkdir, RAW_DIR:sub(1, -2)); pcall(lfs.mkdir, j.dir:sub(1, -2)) end
+  if readSmall(j.dir .. "done.txt", 16) then st.status = "done"; return end
+  if readSmall(j.dir .. "error.txt", 256) then st.status, st.error = "error", "previous_error"; return end
+  local n, from = (readSmall(j.dir .. "cursor.txt", 64) or ""):match("^(%d+) (%d+)")
+  n, from = tonumber(n) or 1, tonumber(from) or 0
+  if n < 1 or n > #j.items then n, from = 1, 0 end
+  st.status, running = "running", true
+  if openItem(n, from) then event.executeAfterMs(TICK_MS, tick) end
+end
+
+local function stop()
+  stopped = true
+  running = false
+  closeCur()
+end
+
+return { poll = poll, stop = stop, status = function() return st end }
+end)()
+
 local function addReveal(data)
   if data.map then
     data.party = partyState()
@@ -1602,6 +1863,7 @@ end
 
 local function writeSnapshot(force)
   local data = addReveal(snapshot())
+  data.rawcopy = rawCopy.status()
   --observedClockUs changes every read, so leave it out of the change test
   local function list(...)   --nil -> false, so a missing field cannot cut the list short (# stops at a nil hole)
     local t = table.pack(...)
@@ -1631,7 +1893,9 @@ local function writeSnapshot(force)
                           data.quests and data.quests.status, data.quests and data.quests.bankA,
                           data.quests and data.quests.bankB, data.quests and data.quests.stages,
                           data.battle and data.battle.status, data.battle and data.battle.flags,
-                          data.battle and data.battle.changes))
+                          data.battle and data.battle.changes,
+                          data.rawcopy.status, data.rawcopy.item, data.rawcopy.bytes, data.rawcopy.paused,
+                          data.rawcopy.error))
   local now = safeCall(event.getClock) or 0
   if not force and digest == lastDigest and (now - lastPublishClock) < HEARTBEAT_MS * 1000 then
     return
@@ -1663,6 +1927,7 @@ end
 local function poll()
   if exiting then return end
   pcall(editTick)
+  pcall(rawCopy.poll)
   writeSnapshot(false)
   event.executeAfterMs(POLL_MS, poll)
 end
@@ -1678,6 +1943,7 @@ end
 
 local function onExit(kind)
   exiting = true
+  pcall(rawCopy.stop)
   seq = seq + 1
   local f = io.open(SLOT_FILES[slot], "w")
   if f then

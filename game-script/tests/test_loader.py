@@ -1,4 +1,4 @@
-"""Tests for the signed loader stub (game-script/loader/stub.lua, assembled by scripts/build_stub.py) in Lua 5.4 via lupa,
+"""Tests for the signed loader stub (game-script/loader/stub.lua, assembled by scripts/build_stub.py) in Lua 5.4 and 5.5 via lupa,
 with throwaway keys made here (never the real ones) and a simulated file system. Checks that only a correctly signed,
 not-older core ever runs, that the rollback journal and the recovery-key policy behave as specified, and that every
 refusal leaves the core unrun with a clear reason in live/loader_status.json.
@@ -9,7 +9,8 @@ import sys
 from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
-from lupa.lua54 import LuaRuntime
+import lupa.lua54
+import lupa.lua55
 
 ROOT = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / 'scripts'))
@@ -30,11 +31,16 @@ def core_text(tag, extra=''):
 class Thor:
     """One game install: a disk (shared + private), and a fresh Lua state per game start."""
 
+    runtime = lupa.lua54            # set per run by main()
+    fake_version = None              # e.g. "Lua 5.3": the stub must refuse it
+
     def __init__(self, stub, disk=None):
         self.stub, self.disk, self.readonly = stub, disk if disk is not None else {}, set()
 
     def start(self):
-        lua = LuaRuntime(unpack_returned_tuples=True)
+        lua = Thor.runtime.LuaRuntime(unpack_returned_tuples=True)
+        if Thor.fake_version:
+            lua.execute(f'_VERSION = "{Thor.fake_version}"')
         g = lua.globals()
         disk, ro = self.disk, self.readonly
 
@@ -74,7 +80,8 @@ class Thor:
         self.disk[SIG] = cs.sign_core(key, core, seq, version, min_stub, DATE)
 
 
-def main():
+def main(runtime):
+    Thor.runtime = runtime
     rel, rec, other, rel2 = (Ed25519PrivateKey.generate() for _ in range(4))
     stub = build_stub.build(cs.raw_public(rel), cs.raw_public(rec), 5)
     ok = 0
@@ -131,7 +138,15 @@ def main():
     fresh(lambda u: u.disk.__setitem__(CORE, u.disk[CORE].replace(b'\n', b'\r\n')), 'bad_format', 'CRLF core refused (no newline rewriting)')
     fresh(lambda u: u.disk.__setitem__(CORE, b'\x1bLua' + u.disk[CORE]), 'bad_format', 'bytecode refused')
     fresh(lambda u: u.disk.__setitem__(CORE, b'-' * 524289), 'bad_format', 'oversized core refused without running')
-    fresh(lambda u: u.put_core(rel, core_text('m'), 9, min_stub=2), 'stub_old', 'core needing a newer loader refused')
+    fresh(lambda u: u.put_core(rel, core_text('m'), 9, min_stub=3), 'stub_old', 'core needing a newer loader refused')
+    u = Thor(stub)
+    u.put_core(rel, core_text('m'), 9, min_stub=2)
+    check(u.start()[0]['result'] == 'ok', 'core needing loader 2 runs on this loader')
+    Thor.fake_version = 'Lua 5.3'
+    try:
+        fresh(lambda u: None, 'unsupported_lua', 'other Lua versions refused: nothing runs')
+    finally:
+        Thor.fake_version = None
     fresh(lambda u: [u.disk.__setitem__(STATE + 'journal_a.txt', b'junk\n'), u.disk.__setitem__(STATE + 'journal_b.txt', b'junk\n')],
           'state_corrupt', 'corrupt rollback journal: fail closed, no silent reset')
     fresh(lambda u: u.readonly.add(STATE), 'state_unwritable', 'journal cannot be saved: core does not run')
@@ -177,9 +192,11 @@ def main():
     st, _, _ = status_text.start()
     check(set(st) <= {'contract', 'stub', 'result', 'version', 'sequence', 'keyId', 'epoch', 'verifyMs', 'detail', 'wallTime'}
           and isinstance(st.get('verifyMs'), int)
-          and st['contract'] == 'ffxii.loader.v1' and st['stub'] == 1, 'status receipt has only the fixed fields')
-    print(f'{ok}/{ok} PASS. Signed loader stub; throwaway keys; simulated files; the stub never touched game memory.')
+          and st['contract'] == 'ffxii.loader.v1' and st['stub'] == 2, 'status receipt has only the fixed fields')
+    version = runtime.LuaRuntime().eval('_VERSION')
+    print(f'{ok}/{ok} PASS ({version}). Signed loader stub; throwaway keys; simulated files; the stub never touched game memory.')
 
 
 if __name__ == '__main__':
-    main()
+    for rt in (lupa.lua54, lupa.lua55):
+        main(rt)

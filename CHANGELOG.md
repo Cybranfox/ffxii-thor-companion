@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.15.0-beta
+- **Works with LUA Script Loader 2.0.1.** The loader file the companion installs now runs on ffgriever's new loader
+  (and still on 1.7.1). If you switch to 2.0.1, run install.cmd once more.
+- **Groundwork for no-PC updates.** The game script can now copy the game files the map data needs, in small bits
+  while you play, when the app asks it to. The app part comes next; nothing changes for you yet.
 - **Map data format 2.** The map data now records what each picture looks like instead of the exact file, so the
   phone will be able to build the map data itself later, without a PC. Your current map data still works; nothing to
   re-run. If you do re-run the data builder, update the app first: older apps can't read the new format.

@@ -121,7 +121,7 @@ def main():
     assert r == {'contract': 'ffxii.reveal.v1', 'mapId': 585, 'slot': 0x2E, 'status': 'ok', 'stable': True,
                  'record': REC_585.hex(), 'observedClockUs': r['observedClockUs']}, r
     assert s['data']['hello']['capabilities']['map.reveal'] == 'on'
-    assert s['data']['hello']['producer']['version'] == '0.14.0-beta'
+    assert s['data']['hello']['producer']['version'] == '0.15.0-beta'
     t = s['data']['revealTable']
     assert t['status'] == 'ok' and t['stable'] and t['records'] == '46:' + REC_585.hex(), t
     ok += 1

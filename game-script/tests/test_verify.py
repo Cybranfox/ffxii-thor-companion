@@ -1,4 +1,4 @@
-"""The loader's pure-Lua Ed25519/SHA-512 verifier (game-script/loader/verify.lua) in Lua 5.4: the five RFC 8032 section 7.1
+"""The loader's pure-Lua Ed25519/SHA-512 verifier (game-script/loader/verify.lua) in Lua 5.4 and 5.5: the five RFC 8032 section 7.1
 vectors, SHA-512 against Python, 64 random valid signatures from the `cryptography` package, and rejection of every
 single-bit change to a signature, a wrong key, wrong messages and malformed inputs. Needs: lupa, cryptography.
 """
@@ -9,13 +9,15 @@ from pathlib import Path
 
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.hazmat.primitives import serialization
-from lupa.lua54 import LuaRuntime
+import lupa.lua54
+import lupa.lua55
 
 LOADER = Path(__file__).resolve().parents[1] / 'loader'
 
 
-def main():
-    lua = LuaRuntime(encoding=None)
+def main(runtime):
+    lua = runtime.LuaRuntime(encoding=None)
+    version = lua.eval('_VERSION')
     v = lua.execute((LOADER / 'verify.lua').read_text(encoding='utf-8'))
     ok = 0
     vec = json.loads((LOADER / 'rfc8032_vectors.json').read_text(encoding='utf-8'))['vectors']
@@ -52,8 +54,23 @@ def main():
     for badpk in (pk[:31], b'\0' * 32, b'\x01' + b'\0' * 31):
         assert v.verify(badpk, msg, sig) is False
         ok += 1
-    print(f'{ok}/{ok} PASS. Pure-Lua Ed25519 verify: 5 RFC 8032 vectors, SHA-512, 64 random keys, 512 bit flips, malformed inputs.')
+    print(f'{ok}/{ok} PASS ({version.decode()}). Pure-Lua Ed25519 verify: 5 RFC 8032 vectors, SHA-512, 64 random keys, '
+          '512 bit flips, malformed inputs.')
+
+
+def other_lua_refused():
+    lua = lupa.lua54.LuaRuntime(encoding=None)
+    lua.execute('_VERSION = "Lua 5.3"')
+    try:
+        lua.execute((LOADER / 'verify.lua').read_text(encoding='utf-8'))
+    except lupa.lua54.LuaError as e:
+        assert b'requires Lua 5.4 or 5.5' in str(e).encode() or 'requires Lua 5.4 or 5.5' in str(e), e
+        print('1/1 PASS. Any other Lua version is refused before the verifier is built.')
+        return
+    raise AssertionError('verify.lua loaded under a fake Lua 5.3')
 
 
 if __name__ == '__main__':
-    main()
+    for rt in (lupa.lua54, lupa.lua55):
+        main(rt)
+    other_lua_refused()
