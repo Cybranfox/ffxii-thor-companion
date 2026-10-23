@@ -1,12 +1,12 @@
 """Builds the companion's local map atlas from the user's own FFXII_TZA.vbf (read-only, in memory).
 
 Output folder (pushed to /sdcard/Download/FFXII_companion/atlas/ on the Thor; never bundled into the APK):
-  index.json  format "ffxii-companion-atlas-1": one entry per menu-map sheet with mapId, region file, sheet
+  index.json  format "ffxii-companion-atlas-2": one entry per menu-map sheet with mapId, region file, sheet
               index, width, height, the game's reveal stride, sheets-per-map count, 64-px tile occupancy and
-              the PNG's sha256.
+              the sheet's pixel hash (pixel_sha256: the same on any builder, whatever PNG encoder it uses).
   <mapId>_<region>_<index>.png  8-bit grayscale coverage mask (sheet value 0..127 doubled), no colour or tint:
               the game's runtime palette/tint for these masks is still unknown.
-  regions.json  format "ffxii-companion-regions-1": per region file, where each sheet sits in the game's region
+  regions.json  format "ffxii-companion-regions-2": per region file, where each sheet sits in the game's region
               view, the connector lines, (0.12) the exit labels (menumap_names.py) and (0.13) the map symbols:
               per region "icons", top-level "symbols" (icons/type_NN.png) and "thresholds" (menumap_icons.py). Rule (evidence/map_assets/region_layout, 21 Oct 2026): a sheet's top-left
               corner is its menumap_location.bin ('lmap') point and 1 layout unit = 4 sheet pixels; overlaying that
@@ -15,7 +15,9 @@ Each index.json entry also carries "slot" (reveal record slot from the game's na
 "origin" {x0, z0, width, depth}: the sheet's NPS2 record. The game draws the map in world units with 16 units per
 64-px tile and the view translated by -(x0, z0), so sheet px = 4 * (x - x0), 4 * (z - z0)
 (FFXII_Position_Transform_Static_2026-10-21.md).
-The receiver verifies each PNG's sha256 and dimensions against index.json before use.
+  files.json  format "ffxii-companion-atlas-files-1": size and sha256 of every PNG as this builder wrote it.
+              The receiver checks each PNG against it (and its dimensions against index.json) before use.
+Atlas 2 (0.15.0): before it, index.json/regions.json held the PNG file hashes, which differ between PNG encoders.
 
 Usage: mapatlas_pack.py <FFXII_TZA.vbf> <out_dir>
 """
@@ -39,17 +41,36 @@ import menumap_tile_index  # noqa: E402
 import reveal_state  # noqa: E402
 import vbf_extract  # noqa: E402
 
-FORMAT = 'ffxii-companion-atlas-1'
-REGIONS_FORMAT = 'ffxii-companion-regions-1'
+FORMAT = 'ffxii-companion-atlas-2'
+REGIONS_FORMAT = 'ffxii-companion-regions-2'
+FILES_FORMAT = 'ffxii-companion-atlas-files-1'
 LOCATION = 'ps2data/image/ff12/myoshiok/us/worldmap/menumap_location.bin'
 NAV = 'ps2data/image/ff12/in/bin/navimapdata.bin'
 UNITS_PER_SHEET_PX = 0.25
 
 
-def png_bytes(mask):
+def pixel_sha256(channels, width, height, samples):
+    """Hash of the picture itself: tag, channel count (1 = L8, 4 = RGBA8), u32 BE width and height, then the raw
+    row-major samples (RGBA straight, not premultiplied). Atlas.pixelSha256 in the app computes the same."""
+    if channels not in (1, 4) or len(samples) != channels * width * height:
+        raise ValueError('pixel buffer does not match its size')
+    h = hashlib.sha256(b'ffxii.pixels.v1\0' + bytes([channels]) + width.to_bytes(4, 'big') + height.to_bytes(4, 'big'))
+    h.update(samples)
+    return h.hexdigest()
+
+
+def mask_samples(mask):
+    return np.minimum(255, mask.astype(np.uint16) * 2).astype(np.uint8)
+
+
+def png_bytes(samples):
     buf = io.BytesIO()
-    Image.fromarray(np.minimum(255, mask.astype(np.uint16) * 2).astype(np.uint8), 'L').save(buf, 'PNG', optimize=True)
+    Image.fromarray(samples, 'L').save(buf, 'PNG', optimize=True)
     return buf.getvalue()
+
+
+def receipt(fn, data):
+    return {'file': fn, 'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()}
 
 
 def main(vbf, out):
@@ -65,7 +86,7 @@ def main(vbf, out):
             labels = menumap_names.parse(vbf_extract.extract(f, index[menumap_names.PATH], blocks))
         except ValueError as e:
             print('exit labels skipped:', e)
-    thresholds, symbols = None, []                  # 0.13.0 map symbols: optional too
+    thresholds, symbols, files = None, [], []       # 0.13.0 map symbols: optional too
     try:
         thresholds = menumap_icons.flagrom(vbf_extract.extract(f, index[menumap_icons.FLAGROM], blocks))
         (out / 'icons').mkdir(exist_ok=True)
@@ -75,10 +96,11 @@ def main(vbf, out):
             fn = f'icons/type_{typ:02d}.png'
             (out / fn).write_bytes(buf.getvalue())
             symbols.append({'type': typ, 'file': fn, 'width': w, 'height': h,
-                            'sha256': hashlib.sha256(buf.getvalue()).hexdigest()})
+                            'pixelEncoding': 'RGBA8', 'pixelSha256': pixel_sha256(4, w, h, bytes(rgba))})
+            files.append(receipt(fn, buf.getvalue()))
     except (KeyError, ValueError) as e:
         print('map symbols skipped:', e)
-        thresholds, symbols = None, []
+        thresholds, symbols, files = None, [], []
 
     def slot_of(map_id):
         if map_id >= len(nav):
@@ -91,7 +113,8 @@ def main(vbf, out):
         region = name.rsplit('/', 1)[1][len('menumap_'):-len('.bin')]
         raw = vbf_extract.extract(f, index[name], blocks)
         for i, s in enumerate(menumap_sloc.parse(raw)['sheets']):
-            data = png_bytes(s['mask'])
+            samples = mask_samples(s['mask'])
+            data = png_bytes(samples)
             fn = f"{s['map_id']}_{region}_{i}.png"
             (out / fn).write_bytes(data)
             entries.append({'mapId': s['map_id'], 'region': region, 'sheet': i, 'file': fn, 'slot': slot_of(s['map_id']),
@@ -99,7 +122,9 @@ def main(vbf, out):
                             'stride': reveal_state.stride_for(s['width']),
                             'tiles': menumap_tile_index.occupancy(s['mask']),
                             'origin': {k: round(v, 4) for k, v in s['nps2'].items()},
-                            'bytes': len(data), 'sha256': hashlib.sha256(data).hexdigest()})
+                            'pixelEncoding': 'L8',
+                            'pixelSha256': pixel_sha256(1, s['width'], s['height'], samples.tobytes())})
+            files.append(receipt(fn, data))
         layout = region_layout(region, [e for e in entries if e['region'] == region], lmap, labels)
         if layout and symbols:
             layout['icons'] = [{'mapId': m, 'group': g, 'index': i, 'type': ty, 'sx': sx, 'sy': sy, 'dx': dx, 'dy': dy,
@@ -121,9 +146,11 @@ def main(vbf, out):
     if symbols:
         doc['symbols'], doc['thresholds'] = symbols, thresholds
     (out / 'regions.json').write_text(json.dumps(doc, separators=(',', ':')), encoding='utf-8')
+    doc = {'format': FILES_FORMAT, 'files': sorted(files, key=lambda r: r['file'])}
+    (out / 'files.json').write_text(json.dumps(doc, separators=(',', ':')), encoding='utf-8')
     print('regions with layout', len(regions), 'exit labels', sum(len(r['exits']) for r in regions),
           'map symbols', sum(len(r.get('icons', [])) for r in regions), 'symbol images', len(symbols))
-    total = sum(e['bytes'] for e in entries)
+    total = sum(r['bytes'] for r in files if not r['file'].startswith('icons/'))
     print(out, len(entries), 'sheets', f'{total / 1e6:.1f} MB PNG', 'multi-sheet maps',
           sum(1 for v in per_map.values() if v > 1))
 

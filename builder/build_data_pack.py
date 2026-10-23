@@ -113,6 +113,7 @@ def build(game, out, with_map=True, log=print):
         atlas = sum(1 for p in (pack / 'atlas').glob('*.png'))
     info = {
         'builder': BUILDER_VERSION,
+        'atlasFormat': 2 if atlas else None,     # 0.15.0: pixel hashes + atlas/files.json; needs app 0.15.0 or newer
         'included': {
             'names': len(ref['gear']), 'gambitConditions': len(ref.get('gambitConditions') or {}),
             'licenceBoards': len(v['boards']['boards']), 'areas': len(v['areas']), 'mapSheets': atlas,

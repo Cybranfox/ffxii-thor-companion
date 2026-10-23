@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+- **Map data format 2.** The map data now records what each picture looks like instead of the exact file, so the
+  phone will be able to build the map data itself later, without a PC. Your current map data still works; nothing to
+  re-run. If you do re-run the data builder, update the app first: older apps can't read the new format.
+
 ## 0.14.0-beta
 - **Story hint.** The Location card shows the game's own "where to go next" line, the one at the bottom of the
   game's map screen, picked the same way the game picks it from your story progress. Text only: the game's files

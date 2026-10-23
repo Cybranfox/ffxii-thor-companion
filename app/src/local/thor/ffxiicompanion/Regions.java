@@ -25,9 +25,13 @@ import java.util.Map;
  * an exit's label is dimmed while its story gate is closed, as the game does, and the map symbols are drawn where and
  * when the game draws them (Flags.symbolVisible), each at layout (area x + display x, area y + display y). They are
  * the game's own pictures and the app never names them: what each one means is not established.
+ *
+ * Atlas 2 (0.15.0, format ffxii-companion-regions-2): symbols carry their pixel hash instead of the PNG's sha256,
+ * which comes from atlas/files.json (AtlasFiles), as for the sheets in Atlas.
  */
 final class Regions {
     static final String FORMAT = "ffxii-companion-regions-1";
+    static final String FORMAT_2 = "ffxii-companion-regions-2";
     static final int MAX_BYTES = 1024 * 1024;
 
     static final class Placed {
@@ -117,10 +121,15 @@ final class Regions {
     private final Map<String, Region> byFile = new HashMap<>();
     final Map<Integer, Symbol> symbols = new HashMap<>();
     int[][] thresholds;
+    int version = 1;        // 1 or 2: must match the atlas index
 
     private Regions(double unitsPerSheetPx) { this.unitsPerSheetPx = unitsPerSheetPx; }
 
-    static Regions parse(String text) {
+    /** Regions 1 only (no receipt). */
+    static Regions parse(String text) { return parse(text, null); }
+
+    /** Null for anything malformed. A v2 file needs the receipt (files.json) for its symbol pictures. */
+    static Regions parse(String text, AtlasFiles files) {
         if (text == null || text.isEmpty() || text.length() > MAX_BYTES) return null;
         Object root;
         try {
@@ -128,12 +137,15 @@ final class Regions {
         } catch (IllegalArgumentException e) {
             return null;
         }
-        if (!FORMAT.equals(Json.str(root, "format"))) return null;
+        String format = Json.str(root, "format");
+        int version = FORMAT.equals(format) ? 1 : FORMAT_2.equals(format) ? 2 : 0;
+        if (version == 0 || (version == 2 && files == null)) return null;
         Object u = root instanceof Map ? ((Map<?, ?>) root).get("unitsPerSheetPx") : null;
         if (!(u instanceof Number) || ((Number) u).doubleValue() != 0.25) return null;   // the verified rule only
         List<Object> raw = Json.arr(root, "regions");
         if (raw == null) return null;
         Regions out = new Regions(0.25);
+        out.version = version;
         for (Object r : raw) {
             String name = Json.str(r, "region");
             List<Object> sh = Json.arr(r, "sheets"), ln = Json.arr(r, "links");
@@ -183,6 +195,11 @@ final class Regions {
             for (Object o : sy) {
                 Long ty = Json.lng(o, "type"), w = Json.lng(o, "width"), h = Json.lng(o, "height");
                 String file = Json.str(o, "file"), sha = Json.str(o, "sha256");
+                if (version == 2) {
+                    String px = Json.str(o, "pixelSha256");
+                    if (!"RGBA8".equals(Json.str(o, "pixelEncoding")) || px == null || !px.matches("[0-9a-f]{64}")) continue;
+                    sha = file == null ? null : files.sha256(file);
+                }
                 if (ty == null || w == null || h == null || file == null || sha == null || !file.matches("icons/type_[0-9]{2}\\.png")
                         || w < 1 || h < 1 || w > 256 || h > 256) continue;
                 out.symbols.put(ty.intValue(), new Symbol(ty.intValue(), file, w.intValue(), h.intValue(), sha));

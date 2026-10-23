@@ -11,8 +11,8 @@ rm -rf tests/classes && mkdir -p tests/classes
 P=src/local/thor/ffxiicompanion
 "$JDK/bin/javac" -source 11 -target 11 -Xlint:-options -encoding UTF-8 -d tests/classes \
   $P/Json.java $P/Flags.java $P/Objectives.java $P/Target.java $P/DataFiles.java $P/Details.java $P/Snapshot.java $P/Party.java $P/ReceiverState.java $P/SnapshotOrder.java $P/Place.java $P/LoaderStatus.java \
-  $P/AutoClosePolicy.java $P/Atlas.java $P/Reveal.java $P/Regions.java $P/Position.java $P/Reference.java $P/Gambits.java $P/GambitEdit.java $P/Build.java $P/LicenceNodes.java $P/GambitPlan.java $P/ApplyPlan.java $P/Equipped.java $P/EquipTable.java $P/Optimize.java $P/ItemCheck.java $P/LicenceBoards.java $P/LicenceRules.java \
-  tests/SnapshotOrderTest.java tests/ReceiverStateTest.java tests/AutoClosePolicyTest.java tests/RevealTest.java tests/ReferenceTest.java tests/GambitsTest.java tests/GambitEditTest.java tests/BuildTest.java tests/GambitPlanTest.java tests/ApplyTest.java tests/OptimizeTest.java tests/LicenceBoardsTest.java tests/LicenceRulesTest.java tests/PlaceTest.java tests/ActionNamesTest.java tests/SetActiveTest.java tests/LoaderStatusTest.java tests/DataFilesTest.java tests/TargetTest.java tests/FlagsTest.java tests/ObjectivesTest.java
+  $P/AutoClosePolicy.java $P/Atlas.java $P/AtlasFiles.java $P/Reveal.java $P/Regions.java $P/Position.java $P/Reference.java $P/Gambits.java $P/GambitEdit.java $P/Build.java $P/LicenceNodes.java $P/GambitPlan.java $P/ApplyPlan.java $P/Equipped.java $P/EquipTable.java $P/Optimize.java $P/ItemCheck.java $P/LicenceBoards.java $P/LicenceRules.java \
+  tests/SnapshotOrderTest.java tests/ReceiverStateTest.java tests/AutoClosePolicyTest.java tests/RevealTest.java tests/AtlasTest.java tests/ReferenceTest.java tests/GambitsTest.java tests/GambitEditTest.java tests/BuildTest.java tests/GambitPlanTest.java tests/ApplyTest.java tests/OptimizeTest.java tests/LicenceBoardsTest.java tests/LicenceRulesTest.java tests/PlaceTest.java tests/ActionNamesTest.java tests/SetActiveTest.java tests/LoaderStatusTest.java tests/DataFilesTest.java tests/TargetTest.java tests/FlagsTest.java tests/ObjectivesTest.java
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.AutoClosePolicyTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.SnapshotOrderTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.PlaceTest
@@ -27,6 +27,7 @@ mkdir -p tests/out
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.SetActiveTest tests/out
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.ReceiverStateTest tests/fixtures
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.RevealTest tests/fixtures "${ATLAS_INDEX:-}"
+"$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.AtlasTest "${ATLAS2_DIR:-}"
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.ReferenceTest "${REFERENCE_JSON:-}"
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.GambitsTest "${GAMBIT_DUMP:-}" "${REFERENCE_JSON:-}"
 mkdir -p tests/out

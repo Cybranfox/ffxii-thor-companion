@@ -25,6 +25,7 @@ jobs:
           python -B builder/tests/test_menumap_names.py
           python -B builder/tests/test_menumap_icons.py
           python -B builder/tests/test_objectives_pack.py
+          python -B builder/tests/test_mapatlas_pixels.py
       - name: Build APK (debug-signed here; releases are signed locally with the release key)
         run: |
           mkdir -p ~/.android

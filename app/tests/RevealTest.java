@@ -205,7 +205,10 @@ public final class RevealTest {
                 "unverified layout scale rejected");
         ok("regions file with an unverified scale rejected");
         if (args.length > 1 && Files.isRegularFile(Paths.get(args[1]))) {  // optional: the real PC-built atlas index
-            Atlas real = Atlas.parse(new String(Files.readAllBytes(Paths.get(args[1])), StandardCharsets.UTF_8));
+            java.nio.file.Path rec = Paths.get(args[1]).resolveSibling("files.json");   // atlas 2 receipt, if any
+            AtlasFiles files = Files.isRegularFile(rec)
+                    ? AtlasFiles.parse(new String(Files.readAllBytes(rec), StandardCharsets.UTF_8)) : null;
+            Atlas real = Atlas.parse(new String(Files.readAllBytes(Paths.get(args[1])), StandardCharsets.UTF_8), files);
             check(real != null && real.sheetCount == 390, "real atlas: 390 sheets");
             check(real.sheets(585).size() == 1 && real.sheets(585).get(0).width == 1024, "585 single 1024-px sheet");
             check(real.sheets(581).size() == 1 && real.sheets(581).get(0).width == 512, "581 single 512-px sheet");

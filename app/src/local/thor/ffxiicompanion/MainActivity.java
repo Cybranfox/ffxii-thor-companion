@@ -1079,7 +1079,10 @@ public class MainActivity extends Activity {
         gambitsView.show(ms, reference, st, live);
     }
 
-    /** Reads atlas/index.json at most every ATLAS_RETRY_MS until it parses. */
+    /**
+     * Reads atlas/index.json at most every ATLAS_RETRY_MS until it parses. Atlas 2 (0.15.0) also needs
+     * atlas/files.json, and index.json and regions.json must be the same version (one builder run).
+     */
     void loadAtlas() {
         if (atlas != null) return;
         long now = SystemClock.elapsedRealtime();
@@ -1088,10 +1091,23 @@ public class MainActivity extends Activity {
         File f = new File(atlasDir, "index.json");
         if (!f.isFile()) { atlasProblem = "map atlas not installed on this device"; return; }
         byte[] data = DataFiles.readBytes(f, Atlas.MAX_INDEX_BYTES);
-        atlas = data == null ? null : Atlas.parse(new String(data, StandardCharsets.UTF_8));
-        if (atlas == null) { atlasProblem = "map atlas index unreadable"; return; }
+        byte[] rec = DataFiles.readBytes(new File(atlasDir, "files.json"), AtlasFiles.MAX_BYTES);
+        AtlasFiles files = rec == null ? null : AtlasFiles.parse(new String(rec, StandardCharsets.UTF_8));
+        atlas = data == null ? null : Atlas.parse(new String(data, StandardCharsets.UTF_8), files);
+        if (atlas == null) {
+            atlasProblem = files == null && data != null && new String(data, StandardCharsets.UTF_8).contains(Atlas.FORMAT_2)
+                    ? "map data is incomplete (files.json missing): run the data builder again"
+                    : "map atlas index unreadable";
+            return;
+        }
         byte[] reg = DataFiles.readBytes(new File(atlasDir, "regions.json"), Regions.MAX_BYTES);
-        regions = reg == null ? null : Regions.parse(new String(reg, StandardCharsets.UTF_8));
+        regions = reg == null ? null : Regions.parse(new String(reg, StandardCharsets.UTF_8), files);
+        if (regions != null && regions.version != atlas.version) {
+            atlas = null;
+            regions = null;
+            atlasProblem = "map data is from two different builder runs: run the data builder again";
+            return;
+        }
         symbolArt = regions != null ? symbolArt(regions) : null;
         applySymbolOption();
     }
