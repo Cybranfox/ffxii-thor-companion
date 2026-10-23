@@ -44,8 +44,11 @@ public final class FlagsTest {
         check(!Flags.symbolVisible(f, rows, 5, 0, 1, 40, 40, 0x1B, rev), "fog hides it");
         check(Flags.symbolVisible(f, rows, 5, 0, 20, 40, 40, 0x1B, rev), "types 14/20/23/24 ignore fog");
         check(!Flags.symbolVisible(f, rows, 5, 0, 1, 40, 20, 0x1C, rev), "closed gate");
-        check(!Flags.symbolVisible(f, rows, 5, 0, 1, 0, 20, 0x1B, rev) && Flags.symbolVisible(f, rows, 9, 0, 20, 0, 20, 0x1B, rev),
-                "zero source hides it, except in groups 6 and 9");
+        check(!Flags.symbolVisible(f, rows, 5, 0, 1, 0, 20, 0x1B, rev) && Flags.symbolVisible(f, rows, 6, 0, 20, 0, 20, 0x1B, rev),
+                "zero source hides it, except in group 6");
+        check(Flags.symbolVisible(f, rows, 9, 0, 17, 0, 0, 0, rev) && Flags.symbolVisible(f, rows, 9, 0, 17, 40, 40, 0, rev)
+                && !Flags.symbolVisible(f, rows, 9, 0, 14, 40, 20, 0x1B, rev) && !Flags.symbolVisible(f, rows, 9, 0, 17, 40, 20, 0x1C, rev),
+                "group 9: own loop, no fog or zero-source test, never type 14, gate still applies");
         check(!Flags.symbolVisible(f, rows, 5, 0, 0, 40, 20, 0, rev) && !Flags.symbolVisible(f, rows, 5, 0, 1, 40, 20, 1, rev),
                 "type 0 and gate 1 never show");
         check(Flags.symbolVisible(f, rows, 5, 2, 14, 40, 20, 0x1B, rev) && !Flags.symbolVisible(f, rows, 5, 1, 14, 40, 20, 0x1B, rev),
@@ -56,6 +59,6 @@ public final class FlagsTest {
 
         check(flags(hex().substring(2), 0, -1) == null && flags(hex().replace('0', 'g'), 0, -1) == null
                 && flags(hex(), 70000, -1) == null, "malformed flags refused");
-        System.out.println("PASS FlagsTest 19 checks (plain/threshold gates, parity, exit dimming, symbol rule, unknown flags)");
+        System.out.println("PASS FlagsTest 20 checks (plain/threshold gates, parity, exit dimming, symbol rule, unknown flags)");
     }
 }

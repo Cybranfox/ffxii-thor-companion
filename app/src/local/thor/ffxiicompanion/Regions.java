@@ -310,7 +310,8 @@ final class Regions {
                 for (Icon i : reg.icons) {
                     if (i.mapId != p.sheet.mapId || !symbols.containsKey(i.type)) continue;
                     if (Flags.symbolVisible(flags, thresholds, i.group, i.index, i.type, i.sx, i.sy, i.gate, p.revealed))
-                        v.symbols.add(new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.sx, p.y + i.sy));
+                        v.symbols.add(i.group == 9 ? new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.dx, p.y + i.dy)   // no line
+                                : new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.sx, p.y + i.sy));
                 }
             }
         }

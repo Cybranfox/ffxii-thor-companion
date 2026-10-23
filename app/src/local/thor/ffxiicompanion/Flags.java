@@ -68,12 +68,15 @@ final class Flags {
      * Whether the game draws a map symbol (0x3DFB50, 0x40499A, 0x3FFF40, 0x404A42, 0x404A5F; the field map's default
      * mode). revealed: the area's reveal cells [row][col] (one per 64-px tile = 16 map units), all true when the game
      * shows whole maps. Unknown flags hide every symbol except those gated "always" (0).
+     * Group 9 has its own loop (0x403C69..0x403D87, Objectives_Hunts_2026-10-22.md, checked in the exe): gate, type and
+     * not type 14, then drawn; no zero-source test, no fog test and no line back to a source point.
      */
     static boolean symbolVisible(Flags f, int[][] thresholds, int group, int index, int type, int sx, int sy, int gate,
                                  boolean[][] revealed) {
         boolean open = gate == 0 || (f != null && f.gate(gate, thresholds));
         if (!open) return false;
-        if (group != 6 && group != 9 && (sx == 0 || sy == 0)) return false;
+        if (group == 9) return type != 0 && type != 14 && gate != 1;
+        if (group != 6 && (sx == 0 || sy == 0)) return false;
         if (type == 0 || gate == 1) return false;
         if (type != 14 && type != 20 && type != 23 && type != 24) {
             int cx = sx / 16, cy = sy / 16;      // Java division truncates toward zero, like the game
