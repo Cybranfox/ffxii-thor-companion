@@ -89,7 +89,12 @@ def build(install=DEFAULT, lang='us'):
             'sources': {'vanillaBattlePack': {'file': pack_path, **sources[pack_path]}},
             'gear': [gear[k] for k in sorted(gear)], 'bestiary': [], 'tips': [],
             'gambitConditions': {f'{k:04x}': v for k,v in sorted(conditions.items())},
-            'gambitActions': actions}
+            'gambitActions': actions,
+            # 0.16.0: character names by member ID. The member record's +4 is its ID (initializer 0x23AC80), and the game
+            # names a member from section 16 record [ID] +0x30 (0x536310; Members_Battle_Trace_2026-10-21.md), so guests
+            # are named like the six.
+            'characters': {str(i): n for i, n in ((i, text(struct.unpack_from('<H', row, 0x30)[0]))
+                                                   for i, row in enumerate(records(16))) if n}}
         nodes = records(12)
         names = {str(i): text(struct.unpack_from('<H', row)[0]) for i,row in enumerate(nodes)}
         boards = []

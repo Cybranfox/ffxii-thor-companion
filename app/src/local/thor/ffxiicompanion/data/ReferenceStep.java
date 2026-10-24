@@ -115,7 +115,13 @@ public final class ReferenceStep {
         byte[][] items=pack.records(18);for(int i=0;i<items.length;i++){String name=pack.text(u16(items[i],8));if(name!=null&&!name.isEmpty())byId.put(i,obj("id",i,"name",name,"category","items","tags",new ArrayList<>(),"lines",new ArrayList<>()));}
         LinkedHashMap<String,Object> sources=obj("vanillaBattlePack",source(PACK,bytes));List<Object> best=new ArrayList<>(),tips=new ArrayList<>();
         for(String path:new String[]{GEAR,BEST,TIPS}){byte[] raw=inputs.config(path);if(raw==null)continue;if(path.equals(GEAR)){for(Object value:gear(raw)){Map<?,?> row=(Map<?,?>)value;byId.put((Integer)row.get("id"),value);}}else if(path.equals(BEST))best=fctr(raw,true);else tips=fctr(raw,false);sources.put(path.equals(GEAR)?"gear":path.equals(BEST)?"bestiary":"tips",source(path,raw));}
-        return obj("format","ffxii-companion-reference-1","kind","REFERENCE","language","us","note","Built by the FFXII Thor Companion data builder from your own game files. Personal use only.","sources",sources,"gear",new ArrayList<>(byId.values()),"bestiary",best,"tips",tips,"gambitConditions",conditions(pack),"gambitActions",gambits);
+        return obj("format","ffxii-companion-reference-1","kind","REFERENCE","language","us","note","Built by the FFXII Thor Companion data builder from your own game files. Personal use only.","sources",sources,"gear",new ArrayList<>(byId.values()),"bestiary",best,"tips",tips,"gambitConditions",conditions(pack),"gambitActions",gambits,"characters",characters(pack));
+    }
+    /** 0.16.0: character names by member ID (section 16 record [ID] +0x30 -> text; 0x536310), guests included. */
+    static LinkedHashMap<String,Object> characters(BattlePack pack)throws IOException {
+        byte[][] rows=pack.records(16);LinkedHashMap<String,Object> out=new LinkedHashMap<>();
+        for(int i=0;i<rows.length;i++){String name=pack.text(u16(rows[i],0x30));if(name!=null&&!name.isEmpty())out.put(Integer.toString(i),name);}
+        return out;
     }
     /** Metadata for BUILD_INFO composition; no second input read required. */
     public static LinkedHashMap<String,Object> metadata(Map<String,Object> reference) {

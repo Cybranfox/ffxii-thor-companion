@@ -1147,7 +1147,8 @@ public class MainActivity extends Activity {
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
         String tags = ("active".equals(m.role) ? "" : " · " + m.role.toUpperCase()) + (ko ? " · KO" : "");
-        TextView n = text((m.leader ? "★ " : "") + (m.name != null ? m.name : "Unknown") + tags, 16, ko ? DIM : TEXT, true);
+        String name = Party.displayName(m, this::loadReference);
+        TextView n = text((m.leader ? "★ " : "") + (name != null ? name : "Unknown") + tags, 16, ko ? DIM : TEXT, true);
         oneLine(n);
         top.addView(n, new LinearLayout.LayoutParams(0, -2, 1));
         TextView hp = text(m.hp != null ? num(m.hp.cur) + " / " + num(m.hp.max) : m.hpInvalid ? "HP invalid" : "HP —", 16,
@@ -1269,8 +1270,12 @@ public class MainActivity extends Activity {
         r.addView(a);
         StringBuilder by = new StringBuilder();
         for (int m : e.targetedBy) {
-            if (m < 0 || m >= Gambits.MEMBERS.length) continue;
-            by.append(by.length() > 0 ? " · " : "").append(Gambits.MEMBERS[m]);
+            String who = m >= 0 && m < Gambits.MEMBERS.length ? Gambits.MEMBERS[m] : null;
+            if (who == null) {                                   // 0.16.0: a guest, named from the game data
+                Reference pack = loadReference();
+                who = pack != null ? pack.characterName(m) : null;
+            }
+            if (who != null) by.append(by.length() > 0 ? " · " : "").append(who);
         }
         if (by.length() > 0) {
             TextView who = text(by.toString(), 13, DIM, false);

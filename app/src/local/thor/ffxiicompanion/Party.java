@@ -27,9 +27,22 @@ final class Party {
         return 0;
     }
 
+    /**
+     * 0.16.0: the name to show. Guests (no name from the game script) are named from the user's game data by member ID;
+     * the pack is only asked for when it's needed. Without a name anywhere: "Member N".
+     */
+    static String displayName(Member m, java.util.function.Supplier<Reference> ref) {
+        if (m.named || m.member == null) return m.name;
+        Reference r = ref.get();
+        String n = r != null ? r.characterName(m.member) : null;
+        return n != null ? n : m.name;
+    }
+
     static final class Member {
         int slot;
         String name;      // as reported by the producer (modded text); null = unknown
+        Integer member;   // the game's member ID, or null
+        boolean named;    // the producer sent a name (the game script names only the six main characters)
         String role;      // "active", "guest", or whatever the producer sent
         boolean leader;
         Vital hp, mp;     // null = unavailable or invalid
@@ -60,7 +73,9 @@ final class Party {
             Long slot = Json.lng(o, "slot");
             m.slot = slot != null ? slot.intValue() : out.size();
             m.name = Json.str(o, "name");
+            m.named = m.name != null;
             Long id = Json.lng(o, "member");
+            m.member = id != null ? id.intValue() : null;
             if (m.name == null && id != null) m.name = "Member " + id;   // logger 0.5.9 names only the six established IDs
             String role = Json.str(o, "role");
             m.role = role != null ? role : "active";

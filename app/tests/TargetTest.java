@@ -73,6 +73,17 @@ public final class TargetTest {
         check((Integer) GambitPlan.byLiveWeakness(0).get(0)[0] == 0x6049, "no live target: the usual order");
         check(GambitPlan.liveWeakness(0x6049, 1) && !GambitPlan.liveWeakness(0x604E, 1) && !GambitPlan.liveWeakness(0x6059, 0xFF),
                 "live-weakness test per condition; Undead isn't an element");
-        System.out.println("PASS TargetTest 19 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
+        // 0.16.0: guests (no name from the game script) are named from the pack's characters by member ID.
+        Reference cr = Reference.parse("{\"format\":\"ffxii-companion-reference-1\",\"kind\":\"REFERENCE\",\"bestiary\":[{\"entry\":1,\"name\":\"W\",\"pages\":[[\"x\"]]}],\"characters\":"
+                + "{\"0\":\"Pack Zero\",\"13\":\"Guest Thirteen\",\"x\":\"bad\",\"14\":\"\"}}");
+        Party pt = Party.parse(obj("{\"members\":[{\"slot\":0,\"member\":0,\"name\":\"Vaan\"},{\"slot\":1,\"member\":13},"
+                + "{\"slot\":2,\"member\":14}]}"));
+        int[] asked = {0};
+        check("Vaan".equals(Party.displayName(pt.members.get(0), () -> { asked[0]++; return cr; })) && asked[0] == 0,
+                "a named member keeps the game script's name; the pack isn't read for it");
+        check("Guest Thirteen".equals(Party.displayName(pt.members.get(1), () -> cr)), "guest 13 named from the pack");
+        check("Member 14".equals(Party.displayName(pt.members.get(2), () -> cr)) && "Member 13".equals(Party.displayName(pt.members.get(1), () -> null)),
+                "no name in the pack, or no pack: Member N, never guessed");
+        System.out.println("PASS TargetTest 22 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
     }
 }

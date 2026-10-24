@@ -46,6 +46,11 @@ final class Reference {
 
     private final Map<Integer, String> actions = new java.util.HashMap<>();
 
+    private final Map<Integer, String> characters = new java.util.HashMap<>();
+
+    /** 0.16.0: a party member's name by member ID from the user's game data (guests too), or null for older packs. */
+    String characterName(int id) { return characters.get(id); }
+
     /** Gambit action name exactly as the game's menu shows it (data pack gambitActions), or null for older packs. */
     String actionName(int id) { return actions.get(id); }
 
@@ -140,6 +145,17 @@ final class Reference {
                     r.actions.put(Integer.parseInt(e.getKey(), 16), (String) e.getValue());
                 } catch (NumberFormatException ignored) {
                     // not an action id
+                }
+            }
+        }
+        Map<String, Object> ch = Json.obj(root, "characters");
+        if (ch != null) {
+            for (Map.Entry<String, Object> e : ch.entrySet()) {
+                if (!(e.getValue() instanceof String) || ((String) e.getValue()).isEmpty()) continue;
+                try {
+                    r.characters.put(Integer.parseInt(e.getKey()), (String) e.getValue());
+                } catch (NumberFormatException ignored) {
+                    // skip malformed keys
                 }
             }
         }
