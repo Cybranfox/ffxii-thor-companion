@@ -15,9 +15,12 @@ import java.util.Set;
  * (0.16.0) those the game would let a gambit use right now (live stock, available > 0); with no stock data, the items the
  * party already has in its gambits, labelled "check stock".
  *
- * Ordering follows what common guides agree on: revive, heal, cure status, then Steal (above attacks, below survival),
- * buffs, then attacks with a general Attack last (GamerGuides battle-system page; Samurai Gamers "Recommended Gambits";
- * Jegged gambit notes; see the doc for links). Roles come from usable abilities, jobs only break ties.
+ * Ordering comes from how the game runs gambits: top to bottom, acting on the first enabled one whose condition matches
+ * and whose action can be used. So the most urgent go first (revive, then heals, then status cures), self-limiting ones
+ * next (Steal only matches a foe at full HP; buffs skip allies that have them; weakness spells only match weak foes), and
+ * the always-matching attacks last, or nothing below them would run. (The 0.9 draft was informed by community advice;
+ * re-derived from this rule on 25 Oct 2026 with the same result: Gambit_Ordering_Provenance_2026-10-25.md.)
+ * Roles come from usable abilities, jobs only break ties.
  */
 final class GambitPlan {
     // conditions (names checked against the modded game text in tests)
