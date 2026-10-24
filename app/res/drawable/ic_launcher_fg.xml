@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original emblem (zodiac ring + crystal), no game assets. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+  <group android:translateX="21" android:translateY="21" android:scaleX="0.55" android:scaleY="0.55">
+    <path android:pathData="M4,60a56,56 0 1,0 112,0a56,56 0 1,0 -112,0Z" android:strokeColor="#FFE6C36E" android:strokeWidth="3" android:fillColor="#00000000"/>
+    <path android:pathData="M13,60a47,47 0 1,0 94,0a47,47 0 1,0 -94,0Z" android:strokeColor="#FFE6C36E" android:strokeAlpha="0.5" android:strokeWidth="1.4" android:fillColor="#00000000"/>
+    <path android:pathData="M57.2,13a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M81.4,19.3a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M98.60000000000001,36.5a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M104.2,60a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M98.60000000000001,83.5a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M81.4,100.7a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M57.2,107a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M34.4,100.7a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M17.200000000000003,83.5a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M10.2,60a2.8,2.8 0 1,0 5.6,0a2.8,2.8 0 1,0 -5.6,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M17.200000000000003,36.5a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M34.4,19.3a2.0999999999999996,2.0999999999999996 0 1,0 4.199999999999999,0a2.0999999999999996,2.0999999999999996 0 1,0 -4.199999999999999,0Z" android:fillColor="#FFE6C36E"/>
+    <path android:pathData="M60,27L74,54L60,93L46,54Z" android:fillColor="#FF9CC8FF" android:fillAlpha="0.3" android:strokeColor="#FFD9ECFF" android:strokeWidth="2.2"/>
+    <path android:pathData="M46,54h28M60,27v66M53,40.5L60,54l7,-13.5" android:strokeColor="#FFD9ECFF" android:strokeAlpha="0.7" android:strokeWidth="1.3" android:fillColor="#00000000"/>
+  </group>
+</vector>

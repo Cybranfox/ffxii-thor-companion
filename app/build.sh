@@ -32,7 +32,9 @@ else
     python -B ../scripts/build_stub.py --out build/assets/install/ThorCompanion.lua > /dev/null
   fi
 fi
-"$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml
+# 0.16.0: res/ holds only original vector art (launcher emblem, tab icons); code loads them by name, so no R class.
+"$BT/aapt2" compile --dir res -o build/res.zip
+"$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml -R build/res.zip --auto-add-overlay
 "${JAVA_BIN}javac" -source 11 -target 11 -Xlint:-options -encoding UTF-8 -cp "$JAR" -d build/classes $(find src -name '*.java')
 # One jar for d8: listing every class file overflows the Windows command line.
 (cd build/classes && "${JAVA_BIN}jar" cf ../classes.jar .)

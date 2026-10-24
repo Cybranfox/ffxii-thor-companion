@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Original art for the FFXII Thor Companion (no game assets). One colour; the app tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+  <path android:pathData="M4.2,4h15.6a1.2,1.2 0 0,1 1.2,1.2v1.8000000000000003a1.2,1.2 0 0,1 -1.2,1.2h-15.6a1.2,1.2 0 0,1 -1.2,-1.2v-1.8000000000000003a1.2,1.2 0 0,1 1.2,-1.2Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M4.2,10h15.6a1.2,1.2 0 0,1 1.2,1.2v1.8000000000000003a1.2,1.2 0 0,1 -1.2,1.2h-15.6a1.2,1.2 0 0,1 -1.2,-1.2v-1.8000000000000003a1.2,1.2 0 0,1 1.2,-1.2Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M4.2,16h15.6a1.2,1.2 0 0,1 1.2,1.2v1.8000000000000003a1.2,1.2 0 0,1 -1.2,1.2h-15.6a1.2,1.2 0 0,1 -1.2,-1.2v-1.8000000000000003a1.2,1.2 0 0,1 1.2,-1.2Z" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M6,6.1h3M6,12.1h3M6,18.1h3" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M15.2,6.1l1.4,1.2l2.4,-2.6" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M15.2,12.1l1.4,1.2l2.4,-2.6" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+</vector>

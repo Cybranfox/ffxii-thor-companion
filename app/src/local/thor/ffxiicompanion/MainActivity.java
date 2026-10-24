@@ -267,6 +267,7 @@ public class MainActivity extends Activity {
         LinearLayout tabRow = new LinearLayout(this);
         tabRow.setPadding(0, dp(2), 0, dp(6));
         String[] names = {"Status", "Gambits", "Equip", "Bestiary", "Licenses"};   // 0.22.0: the game's menu words
+        tabNames = names;
         tabs = new TextView[names.length];
         for (int i = 0; i < names.length; i++) {
             final int idx = i;
@@ -615,7 +616,27 @@ public class MainActivity extends Activity {
         for (int i = 0; i < tabs.length; i++) {
             tabs[i].setBackground(round(i == tab ? ACCENT : CARD, 14));
             tabs[i].setTextColor(i == tab ? BG : TEXT);
+            // 0.16.0: an icon beside the word, never instead of it; inline so the pair stays centred
+            android.graphics.drawable.Drawable d = tabIcon(i, i == tab ? BG : Theme.GOLD);
+            if (d == null) { tabs[i].setText(tabNames[i]); continue; }
+            android.text.SpannableString sp = new android.text.SpannableString("\u00a0 " + tabNames[i]);
+            sp.setSpan(new android.text.style.ImageSpan(d, android.text.style.DynamicDrawableSpan.ALIGN_CENTER), 0, 1,
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            tabs[i].setText(sp);
         }
+    }
+
+    String[] tabNames;
+    static final String[] TAB_ICONS = {"ic_tab_status", "ic_tab_gambits", "ic_tab_equip", "ic_tab_bestiary", "ic_tab_licences"};
+
+    /** 0.16.0: the tab's line icon (res/drawable, original art), tinted; null if it's missing (the word still shows). */
+    android.graphics.drawable.Drawable tabIcon(int i, int color) {
+        int id = i < TAB_ICONS.length ? getResources().getIdentifier(TAB_ICONS[i], "drawable", getPackageName()) : 0;
+        if (id == 0) return null;
+        android.graphics.drawable.Drawable d = getDrawable(id).mutate();
+        d.setTint(color);
+        d.setBounds(0, 0, dp(17), dp(17));
+        return d;
     }
 
     void selectTab(int i) {
