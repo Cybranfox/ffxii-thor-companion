@@ -77,6 +77,12 @@ final class DataFiles {
             this.parse = parse;
         }
 
+        /** Forget the cached value (a new pack is in place; its file may even share the old one's timestamp). */
+        void reset() {
+            stamp = Long.MIN_VALUE;
+            value = null;
+        }
+
         T get() {
             long mt = file.isFile() ? file.lastModified() : -1;
             if (mt != stamp) {

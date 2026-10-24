@@ -17,9 +17,12 @@ import java.util.Set;
  * against the index (block codes, zlib checksums, exact sizes) and records each one's SHA-256 for BUILD_INFO.
  */
 public abstract class Inputs implements AtlasStep.Source {
-    /** An entry the archive has, but whose bytes weren't copied: always an error, never a skipped step. */
+    /**
+     * An entry the archive has whose copy is missing, short or doesn't inflate: always stops the build, never a skipped
+     * step (DataBuilder only skips the story hints over problems in the game's own data, like the PC builder).
+     */
     public static final class NotCopied extends IOException {
-        NotCopied(String path) { super("not copied: " + path); }
+        NotCopied(String path, String why) { super("copy of " + path + ": " + why); }
     }
 
     public static final int MAX_CONFIG = 4 * 1024 * 1024;
@@ -40,8 +43,12 @@ public abstract class Inputs implements AtlasStep.Source {
         if (entry == null) throw new AtlasStep.NoSuchEntry(path);
         ByteArrayOutputStream out = new ByteArrayOutputStream((int) Math.min(entry.size, 1 << 20));
         try (InputStream in = stored(path, entry)) {
-            if (in == null) throw new NotCopied(path);
+            if (in == null) throw new NotCopied(path, "not copied");
             VbfEntryReader.inflate(in, entry, out);
+        } catch (NotCopied e) {
+            throw e;
+        } catch (IOException e) {
+            throw new NotCopied(path, e.getMessage());
         }
         byte[] data = out.toByteArray();
         hashes.put(path, sha256(data));

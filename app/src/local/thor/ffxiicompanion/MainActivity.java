@@ -21,11 +21,13 @@ import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.Toast;
 
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
+
 
 /**
  * The companion's one screen, on the Thor's bottom display. Polls the two A/B snapshot files the game script writes to
@@ -47,6 +49,8 @@ public class MainActivity extends Activity {
     static final File ATLAS_DIR = new File(Environment.getExternalStorageDirectory(), "Download/FFXII_companion/atlas");
     static final File REFERENCE_DIR = new File(Environment.getExternalStorageDirectory(), "Download/FFXII_companion/reference");
     static final File INSTALL_DIR = new File(Environment.getExternalStorageDirectory(), "Download/FFXII_companion/install");
+    /** 0.16.0: the shared folder the data pack and the game script's raw copy live in. */
+    static final File DATA_DIR = new File(Environment.getExternalStorageDirectory(), "Download/FFXII_companion");
     static final long ATLAS_RETRY_MS = 10_000;
     static final int MAX_MASK_BYTES = 4 * 1024 * 1024;
     static final int PARCHMENT = Color.rgb(222, 196, 146);
@@ -128,6 +132,10 @@ public class MainActivity extends Activity {
     ReceiverState.View lastView;
     final AutoClosePolicy autoClose = new AutoClosePolicy();
     boolean installSynced;
+    /** 0.16.0: the process's one writer of the pack and the copy job (outlives this activity). */
+    DataOwner data;
+    int seenInstalls, seenFailures;
+    static final String PACK_HELD = "Finishing a game data update…";
     long restoredFor = -1;
 
     final Runnable poll = new Runnable() {
@@ -144,6 +152,12 @@ public class MainActivity extends Activity {
                 | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
                 | WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
         state = new ReceiverState(fixtureMode);
+        data = DataOwner.get(DATA_DIR, r -> new Thread(() -> {
+            android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND);
+            r.run();
+        }, "data-owner"));
+        seenInstalls = data.installs();
+        seenFailures = data.failures();
         setContentView(buildUi());
     }
 
@@ -445,7 +459,7 @@ public class MainActivity extends Activity {
         Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
         boolean ok = s != null && v.locationFamily.state == ReceiverState.FamilyState.LIVE
                 && (s.synthetic ? fixtureMode : Reveal.buildVerified(s.hello()));
-        Objectives o = objectives.get();
+        Objectives o = data.packReadable() ? objectives.get() : null;
         Flags f = ok ? Flags.parse(Json.obj(s.data, "flags")) : null;
         String hint = o != null && option(OPT_HINT) ? o.hint(f) : null;
         hintLine.setText(hint != null ? "Next: " + hint.replace('\n', ' ') : "");
@@ -532,9 +546,47 @@ public class MainActivity extends Activity {
         (i == 2 ? gearView : bestiaryView).setVisibility(View.VISIBLE);
     }
 
+    /**
+     * 0.16.0: what DataOwner did since the last refresh. A new pack went live: reload everything read from the old one,
+     * in place. A build failed: say why; the previous pack is still the one in use.
+     */
+    void dataEvents() {
+        if (data.installs() != seenInstalls) {
+            seenInstalls = data.installs();
+            dataChanged();
+            Toast.makeText(this, "Game data updated", Toast.LENGTH_SHORT).show();
+        }
+        if (data.failures() != seenFailures) {
+            seenFailures = data.failures();
+            android.util.Log.w("FFXIICompanion", "data build: " + data.lastFailure());
+            Toast.makeText(this, data.lastFailure() + ". Using your previous data.", Toast.LENGTH_LONG).show();
+        }
+    }
+
+    /** A new pack is in place: drop everything read from the old one; screens reload it as they did at start. */
+    void dataChanged() {
+        atlas = null;
+        regions = null;
+        symbolArt = null;
+        masks.clear();
+        atlasProblem = "map atlas not loaded yet";
+        atlasCheckedMono = -ATLAS_RETRY_MS;
+        boolean hadReference = reference != null || referenceProblem != null;
+        reference = null;
+        referenceProblem = null;
+        boardsCache = null;
+        boardsProblem = null;
+        areasStamp = -1;
+        objectives.reset();
+        if (hadReference) loadReference();
+        selectTab(tab);                   // the open tab shows the new data, also when it had none before
+        if (lastView != null) render(lastView);
+    }
+
     /** Loads and binds reference.json once; null (with referenceProblem) when missing or unreadable. */
     Reference loadReference() {
         if (reference != null) return reference;
+        if (!data.packReadable()) { referenceProblem = PACK_HELD; return null; }
         byte[] data = DataFiles.readBytes(new File(referenceDir, "reference.json"), Reference.MAX_BYTES);
         if (data == null) { referenceProblem = "reference.json missing"; return null; }
         reference = Reference.parse(new String(data, StandardCharsets.UTF_8));
@@ -660,7 +712,9 @@ public class MainActivity extends Activity {
         }
         ReceiverState.View v = state.update(slots[0], slots[1], malformed, present,
                 SystemClock.elapsedRealtime(), System.currentTimeMillis());
+        dataEvents();
         render(v);
+        data.tick(v.current != null ? Json.obj(v.current.data, "rawcopy") : null);
         closeAfterExit(v.transport == ReceiverState.Transport.LIVE,
                 v.transport == ReceiverState.Transport.GAME_CLOSED, v.synthetic);
     }
@@ -888,6 +942,7 @@ public class MainActivity extends Activity {
 
     /** Area names from the user's data pack (reference/areas.json), re-read only when the file changes. */
     void loadAreas() {
+        if (!data.packReadable()) return;
         File f = new File(referenceDir, "areas.json");
         long s = f.isFile() ? f.lastModified() : 0;
         if (s == areasStamp) return;
@@ -979,6 +1034,7 @@ public class MainActivity extends Activity {
     /** 0.21.0: boards.json (beside reference.json), loaded once; null with boardsProblem when missing. */
     LicenceBoards boards() {
         if (boardsCache != null) return boardsCache;
+        if (!data.packReadable()) { boardsProblem = PACK_HELD; return null; }
         File f = new File(referenceDir, "boards.json");
         if (!f.isFile()) { boardsProblem = "Game data not installed yet (run the data builder, see INSTALL)"; return null; }
         Map<String, Object> o = DataFiles.jsonObject(f, 512 * 1024);
@@ -1085,6 +1141,7 @@ public class MainActivity extends Activity {
      */
     void loadAtlas() {
         if (atlas != null) return;
+        if (!data.packReadable()) { atlasProblem = PACK_HELD; return; }
         long now = SystemClock.elapsedRealtime();
         if (now - atlasCheckedMono < ATLAS_RETRY_MS) return;
         atlasCheckedMono = now;

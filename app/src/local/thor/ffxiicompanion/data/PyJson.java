@@ -4,6 +4,7 @@ import java.math.BigDecimal;
 import java.math.MathContext;
 import java.math.RoundingMode;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -64,7 +65,7 @@ final class PyJson {
                 case '\b': sb.append("\\b"); break;
                 case '\f': sb.append("\\f"); break;
                 default:
-                    if (c < 0x20 || c > 0x7e) sb.append(String.format("\\u%04x", (int) c));
+                    if (c < 0x20 || c > 0x7e) sb.append(String.format(Locale.ROOT, "\\u%04x", (int) c));
                     else sb.append(c);
             }
         }
@@ -87,7 +88,7 @@ final class PyJson {
         String sign = d < 0 ? "-" : "";
         if (exp10 < -4 || exp10 >= 16) {
             String mant = digits.length() == 1 ? digits : digits.charAt(0) + "." + digits.substring(1);
-            return sign + mant + "e" + (exp10 < 0 ? "-" : "+") + String.format("%02d", Math.abs(exp10));
+            return sign + mant + "e" + (exp10 < 0 ? "-" : "+") + String.format(Locale.ROOT, "%02d", Math.abs(exp10));
         }
         String plain = shortest.abs().toPlainString();
         if (!plain.contains(".")) plain += ".0";

@@ -6,11 +6,13 @@ import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -32,17 +34,24 @@ public final class CopyJob {
 
     static final String CONTRACT = "ffxii.rawcopy.v1", FORMAT = "ffxii-companion-copyjob-1";
     static final int MAX_STATE = 64 * 1024;
+    /** The game script's own request limits (rawCopy MAX_ITEMS, MAX_REQUEST): never send what it would refuse. */
+    static final int MAX_ITEMS = 128, MAX_REQUEST = 40 * 1024;
+    /** rawCopy parseRequest's reasons: the request was refused before any job started (no job folder, no error.txt). */
+    static final List<String> REQUEST_ERRORS = List.of("request_size", "job_id", "too_many_items", "item", "line", "request");
 
     private final File raw;
     private final String gen;
     private Phase phase;
     private String error;
     private int config;                          // CONFIG: 1..Recipe.CONFIGS.size()
+    private boolean built;                       // DONE and the pack from it is in place (PackSwap)
     private final List<String> entries;          // the data job's entries in request order
     private final List<Integer> present;         // configs the player has (1-based)
 
-    private CopyJob(File raw, String gen, Phase phase, String error, int config, List<String> entries, List<Integer> present) {
+    private CopyJob(File raw, String gen, Phase phase, String error, int config, boolean built, List<String> entries,
+                    List<Integer> present) {
         this.raw = raw;
+        this.built = built;
         this.gen = gen;
         this.phase = phase;
         this.error = error;
@@ -57,6 +66,15 @@ public final class CopyJob {
 
     public String gen() { return gen; }
 
+    /** True once a pack built from this job's files is in place. */
+    public boolean built() { return built; }
+
+    /** PackBuild, after the swap. */
+    public void markBuilt() throws IOException {
+        built = true;
+        save();
+    }
+
     /** The game script's job id for the current phase (what data.rawcopy.job shows while it copies). */
     public String jobId() {
         return (phase == Phase.HEADER ? "hdr-" : phase == Phase.CONFIG ? "cf" + config + "-" : "dat-") + gen;
@@ -67,7 +85,7 @@ public final class CopyJob {
         if (gen == null || !gen.matches("[A-Za-z0-9_]{1,24}")) throw new IOException("job generation");
         File raw = new File(base, "raw");
         if (!raw.isDirectory() && !raw.mkdirs()) throw new IOException("can't make " + raw);
-        CopyJob j = new CopyJob(raw, gen, Phase.HEADER, null, 0, new ArrayList<>(), new ArrayList<>());
+        CopyJob j = new CopyJob(raw, gen, Phase.HEADER, null, 0, false, new ArrayList<>(), new ArrayList<>());
         j.request(Collections.singletonList("item=header"));
         j.save();
         return j;
@@ -87,25 +105,39 @@ public final class CopyJob {
             List<Integer> present = new ArrayList<>();
             for (Object x : (List<Object>) o.get("configs")) present.add(((Number) x).intValue());
             return new CopyJob(raw, gen, Phase.valueOf((String) o.get("phase")), (String) o.get("error"),
-                    ((Number) o.get("config")).intValue(), entries, present);
+                    ((Number) o.get("config")).intValue(), Boolean.TRUE.equals(o.get("built")), entries, present);
         } catch (IOException | RuntimeException e) {
             return null;
         }
     }
 
+    /** advance(null): from the files in raw/ alone. */
+    public boolean advance() throws IOException { return advance(null); }
+
     /**
      * Moves the job on from what the game script has left in raw/ (done.txt / error.txt of the current job): the next
      * job's request, or DONE, or FAILED. True when anything changed. Cheap: a few small files.
+     * live: the game script's status from the newest snapshot (data.rawcopy), or null. With it, a job the script
+     * reports done whose done.txt never appeared (a failed write) still moves on (its receipts are checked as
+     * always), and a request the script refused before starting it fails the build with its reason instead of
+     * waiting for files that will never come.
      */
-    public boolean advance() throws IOException {
+    public boolean advance(Map<String, Object> live) throws IOException {
         if (phase == Phase.DONE || phase == Phase.FAILED) return false;
         File dir = new File(raw, jobId());
         String err = small(new File(dir, "error.txt"));
+        boolean ours = live != null && jobId().equals(live.get("job"));
+        Object liveStatus = live == null ? null : live.get("status"), liveError = live == null ? null : live.get("error");
+        if (err == null && "error".equals(liveStatus) && liveError instanceof String
+                && (ours || REQUEST_ERRORS.contains(liveError) && refusesOurRequest(live))) err = (String) liveError;
         boolean missingConfig = phase == Phase.CONFIG && err != null && err.trim().equals("config_missing");
         if (err != null && !missingConfig) return fail("copy stopped: " + err.trim());
-        if (err == null && small(new File(dir, "done.txt")) == null) return false;
+        boolean done = small(new File(dir, "done.txt")) != null || ours && "done".equals(liveStatus);
+        if (err == null && !done) return false;
         try {
             if (phase == Phase.HEADER) {
+                File h = new File(dir, "001.bin");
+                checkItems(dir, Collections.singletonList(h.length()));
                 VbfIndex index = header();
                 List<String> lines = new ArrayList<>();
                 entries.clear();
@@ -114,6 +146,10 @@ public final class CopyJob {
                     lines.add("item=entry " + e.ordinal + " " + e.storedSize + " " + path);
                     entries.add(path);
                 }
+                int bytes = 64;
+                for (String l : lines) bytes += l.length() + 1;
+                if (lines.size() > MAX_ITEMS || bytes > MAX_REQUEST)
+                    throw new IOException("this game needs " + lines.size() + " files copied, more than one request can ask for");
                 phase = Phase.DATA;
                 request(lines);
             } else if (phase == Phase.DATA) {
@@ -136,12 +172,24 @@ public final class CopyJob {
         return true;
     }
 
+    /**
+     * A request refusal (rawCopy parseRequest) belongs to our current request only if the game script says so
+     * (requestJob, from core 7 on), or, on older cores, which keep the last job they ran in status.job, if that last
+     * job is this build's previous one (same gen, earlier phase): then the refused request can only be the one this
+     * build published after it. A refusal left over from another build is never taken for ours.
+     */
+    private boolean refusesOurRequest(Map<String, Object> live) {
+        Object req = live.get("requestJob"), last = live.get("job");
+        if (req instanceof String) return req.equals(jobId());
+        return last instanceof String && ((String) last).endsWith("-" + gen) && !last.equals(jobId());
+    }
+
     /** The copied files for DataBuilder (DONE only). */
     public RawInputs inputs() throws IOException {
         if (phase != Phase.DONE) throw new IOException("copy not finished");
         Map<String, File> files = new HashMap<>(), configs = new HashMap<>();
         File dat = new File(raw, "dat-" + gen);
-        for (int n = 1; n <= entries.size(); n++) files.put(entries.get(n - 1), new File(dat, String.format("%03d.bin", n)));
+        for (int n = 1; n <= entries.size(); n++) files.put(entries.get(n - 1), new File(dat, String.format(Locale.ROOT, "%03d.bin", n)));
         for (int c : present) configs.put(Recipe.CONFIGS.get(c - 1), new File(new File(raw, "cf" + c + "-" + gen), "001.bin"));
         return new RawInputs(new File(new File(raw, "hdr-" + gen), "001.bin"), files, configs);
     }
@@ -185,7 +233,7 @@ public final class CopyJob {
             if (p.length == 2) receipts.put(Integer.parseInt(p[0]), Long.parseLong(p[1]));
         }
         for (int n = 1; n <= expected.size(); n++) {
-            File f = new File(dir, String.format("%03d.bin", n));
+            File f = new File(dir, String.format(Locale.ROOT, "%03d.bin", n));
             Long r = receipts.get(n);
             long want = expected.get(n - 1);
             if (!f.isFile() || r == null || f.length() != r) throw new IOException("item " + n + " incomplete");
@@ -217,18 +265,26 @@ public final class CopyJob {
         o.put("phase", phase.name());
         o.put("error", error);
         o.put("config", config);
+        o.put("built", built);
         o.put("entries", entries);
         o.put("configs", present);
         writeAtomic(new File(raw, "app-job.json"), Json.encode(o));
     }
 
-    /** Write then rename, so the game script never reads half a file. */
+    /**
+     * Write then rename over, so a reader (the game script, the app) sees the old file or the new one, never half of
+     * one. The temporary name is unique, and the replace is one atomic rename (no delete-then-rename fallback).
+     */
     static void writeAtomic(File f, byte[] data) throws IOException {
-        File tmp = new File(f.getPath() + ".tmp");
-        try (OutputStream out = new FileOutputStream(tmp)) {
-            out.write(data);
+        File tmp = new File(f.getPath() + "." + Thread.currentThread().getId() + "-" + System.nanoTime() + ".tmp");
+        try {
+            try (OutputStream out = new FileOutputStream(tmp)) {
+                out.write(data);
+            }
+            Files.move(tmp.toPath(), f.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+        } finally {
+            if (tmp.exists()) tmp.delete();
         }
-        if (!tmp.renameTo(f) && !(f.delete() && tmp.renameTo(f))) throw new IOException("can't write " + f);
     }
 
     /** A small text file (receipts up to 64 KiB, others 4 KiB), or null when absent. */

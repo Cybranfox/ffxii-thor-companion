@@ -24,6 +24,9 @@ final class AtlasFiles {
 
     int size() { return sha256.size(); }
 
+    /** Every listed file and its sha256 (PackCheck hashes each one before a new pack is used). */
+    Map<String, String> all() { return sha256; }
+
     /** Null for anything malformed. A file listed twice or a bad row rejects the whole receipt. */
     static AtlasFiles parse(String text) {
         if (text == null || text.isEmpty() || text.length() > MAX_BYTES) return null;

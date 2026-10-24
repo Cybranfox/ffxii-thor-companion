@@ -43,7 +43,7 @@ public final class RawInputs extends Inputs {
     protected InputStream stored(String path, VbfIndex.Entry entry) throws IOException {
         File f = entries.get(path);
         if (f == null) return null;
-        if (f.length() != entry.storedSize) throw new IOException("stored size: " + path);
+        if (f.length() != entry.storedSize) throw new IOException("wrong size (" + f.length() + " bytes, the archive says " + entry.storedSize + ")");
         return new FileInputStream(f);
     }
 

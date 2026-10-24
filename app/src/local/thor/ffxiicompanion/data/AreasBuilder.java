@@ -10,7 +10,7 @@ public final class AreasBuilder {
     public static final int MAX_STRING_BYTES=1024, MAX_SCANNED_BYTES=4*1024*1024, MAX_JSON_BYTES=4*1024*1024;
     private static String quote(String s) {
         StringBuilder b=new StringBuilder("\"");
-        for(int i=0;i<s.length();i++) { char c=s.charAt(i);switch(c) {case '"':b.append("\\\"");break;case '\\':b.append("\\\\");break;default:if(c<32)b.append(String.format("\\u%04x",(int)c));else b.append(c);}}
+        for(int i=0;i<s.length();i++) { char c=s.charAt(i);switch(c) {case '"':b.append("\\\"");break;case '\\':b.append("\\\\");break;default:if(c<32)b.append(String.format(java.util.Locale.ROOT,"\\u%04x",(int)c));else b.append(c);}}
         return b.append('"').toString();
     }
     public static byte[] build(byte[] raw) throws IOException {

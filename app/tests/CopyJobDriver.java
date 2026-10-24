@@ -12,7 +12,7 @@ import java.util.TreeMap;
  * ThorCompanion-core.lua under lupa, and calls this between ticks, a fresh JVM each time, as an app restart would be).
  * Prints one JSON line.
  *   start   &lt;FFXII_companion dir&gt; &lt;gen&gt;
- *   advance &lt;FFXII_companion dir&gt;
+ *   advance &lt;FFXII_companion dir&gt; [&lt;data.rawcopy JSON&gt;]
  *   beat    &lt;FFXII_companion dir&gt; &lt;epoch seconds&gt;
  *   inputs  &lt;FFXII_companion dir&gt;                       SHA-256 of every inflated entry and config, as DataBuilder sees them
  *   keep    &lt;FFXII_companion dir&gt;                       CopyJob.keepOnlyThis()
@@ -35,7 +35,11 @@ public class CopyJobDriver {
                 job = CopyJob.load(base);
                 if (job == null) throw new IllegalStateException("no job");
         }
-        if (a[0].equals("advance")) out.put("changed", job.advance());
+        if (a[0].equals("advance")) {           // optional: the snapshot's data.rawcopy, as JSON
+            @SuppressWarnings("unchecked")
+            Map<String, Object> live = a.length > 2 ? (Map<String, Object>) Json.parse(a[2].getBytes(java.nio.charset.StandardCharsets.UTF_8)) : null;
+            out.put("changed", job.advance(live));
+        }
         if (a[0].equals("keep")) job.keepOnlyThis();
         if (a[0].equals("inputs")) {
             RawInputs in = job.inputs();

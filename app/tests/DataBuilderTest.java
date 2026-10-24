@@ -170,6 +170,10 @@ public class DataBuilderTest {
         for (int i = 0; i < 17; i++) moved.putShort((short) (i < 5 ? i : 10100 + (i - 5 + 1) % 12)).putShort((short) 0);
         refuses(IOException.class, () -> DataBuilder.jobNames(moved.array()),
                 "job names: ids 10100.. present but not at rows 5..16 (reordered table) refused");
+        byte[] nav = new byte[8 + 3 * 70000];
+        nav[0] = 'N'; nav[1] = 'A'; nav[2] = 'V';
+        ByteBuffer.wrap(nav).order(ByteOrder.LITTLE_ENDIAN).putInt(4, 70000);
+        refuses(IOException.class, () -> AtlasStep.parseNav(nav), "NAV with an absurd record count refused before allocating");
         RawInputs canonical = new RawInputs(hf, entries, configs);
         check(canonical.archiveBytes() == h.length + packed.length + raw.length + 10 + VbfIndex.FOOTER,
                 "archive size from the header: last stored byte + 16-byte footer");

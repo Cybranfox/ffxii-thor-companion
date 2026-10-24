@@ -4,7 +4,9 @@ side runs as a fresh JVM for every step (app/tests/CopyJobDriver.java), the way 
 Checks: header job -> data job by directory row and stored size -> one job per mod config, a missing one just absent
 -> DONE, request removed; every copied entry inflates to its original bytes and nothing outside the recipe is asked
 for; the app's heartbeat pauses and resumes the copy; a game update between the header and data jobs stops the build
-with the game script's reason; keepOnlyThis leaves only the latest set.
+with the game script's reason; keepOnlyThis leaves only the latest set. Review fixes (Review_App_Builder_2026-10-24.md):
+the Java side runs under an Arabic locale; a done.txt the game script couldn't write, a request it refused before
+starting, and a recipe too big for one request don't leave the job waiting forever.
 Needs a JDK (JDK or JAVA_HOME, or javac on PATH).
 
 Usage: python test_rawcopy_app.py
@@ -43,7 +45,10 @@ def jdk_bin():
 
 class App:
     def __init__(self, classes, java, base):
-        self.cmd, self.base = [str(java), '-cp', str(classes), 'local.thor.ffxiicompanion.data.CopyJobDriver'], base
+        # an Arabic locale: file names and request lines must not follow the device's digits (review finding 1)
+        self.cmd = [str(java), '-Duser.language=ar', '-Duser.country=EG', '-cp', str(classes),
+                    'local.thor.ffxiicompanion.data.CopyJobDriver']
+        self.base = base
 
     def __call__(self, *args):
         r = subprocess.run(self.cmd + [args[0], str(self.base)] + [str(a) for a in args[1:]], capture_output=True, text=True)
@@ -61,7 +66,8 @@ def setup(tmp, names=RECIPE_NAMES):
     return head, stored, cfg
 
 
-def run(w, app, until, steps=60, beat=True):
+def run(w, app, until, steps=60, beat=True, live=True):
+    """Ticks the game and advances the app's job (with the snapshot's rawcopy, as MainActivity does) until a phase."""
     seen = []
     for _ in range(steps):
         if beat:
@@ -70,7 +76,7 @@ def run(w, app, until, steps=60, beat=True):
         st = w.snapshot()['rawcopy']
         if st.get('job') and st['job'] not in seen:
             seen.append(st['job'])
-        r = app('advance')
+        r = app('advance', json.dumps(st)) if live else app('advance')
         if r['phase'] in until:
             return r, seen
     raise AssertionError('copy job did not finish: ' + json.dumps(r))
@@ -177,6 +183,61 @@ def run_suite(runtime, classes, java):
         ok += 1
         print(f'PASS ({ver}) archive changed after the header job: FAILED "{r["error"]}", request removed')
         w.close()
+
+    # 4. the game script can't write done.txt (storage full, I/O error): the live status still moves the job on
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        head, stored, cfg = setup(tmp)
+        base = tmp / 'D' / 'FFXII_companion'
+        app = App(classes, java, base)
+        w = World(runtime, tmp)
+        w.lua.execute('''local o = io.open
+          io.open = function(p, m) if p:match("done%.txt$") and m and m:find("w") then return nil end return o(p, m) end''')
+        app('start', 'nd')
+        for _ in range(4):                                            # with its files alone the job waits for ever
+            w.alive()
+            w.drive(4000)
+            r = app('advance')
+        assert r['phase'] == 'HEADER' and w.snapshot()['rawcopy']['status'] == 'done', r
+        r, seen = run(w, app, ('DONE', 'FAILED'))
+        assert r['phase'] == 'DONE' and not list((base / 'raw').rglob('done.txt')), r
+        got = app('inputs')
+        assert all(got['entries'][n] == hashlib.sha256(originals()[n]).hexdigest() for n in IN_RECIPE), got
+        ok += 1
+        print(f'PASS ({ver}) no done.txt ever written: the snapshot status "done" + receipts move the job to DONE, files exact')
+        w.close()
+
+    # 5. a request the game script refuses before starting (reported only in its status): FAILED with its reason
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        setup(tmp)
+        base = tmp / 'D' / 'FFXII_companion'
+        app = App(classes, java, base)
+        w = World(runtime, tmp)
+        app('start', 'rq')
+        r, _ = run(w, app, ('DATA',))
+        (base / 'raw' / 'request.txt').write_text('contract=ffxii.rawcopy.v1\njob=dat-rq\n' + 'item=header\n' * 4000)
+        r, _ = run(w, app, ('DONE', 'FAILED'))
+        assert r['phase'] == 'FAILED' and 'request_size' in r['error'], r
+        ok += 1
+        print(f'PASS ({ver}) request refused by the game script (only in its status): FAILED "{r["error"]}"')
+        w.close()
+
+    # 6. a game whose recipe needs more than one request can hold: refused before anything is sent
+    with tempfile.TemporaryDirectory() as td:
+        tmp = Path(td)
+        many = RECIPE_NAMES + tuple(f'ps2data/image/ff12/myoshiok/us/worldmap/menumap_sub{i:03d}.bin' for i in range(100, 230))
+        setup(tmp, names=many)
+        base = tmp / 'D' / 'FFXII_companion'
+        app = App(classes, java, base)
+        w = World(runtime, tmp)
+        app('start', 'big')
+        r, _ = run(w, app, ('DATA', 'DONE', 'FAILED'))
+        req = (base / 'raw' / 'request.txt')
+        assert r['phase'] == 'FAILED' and 'more than one request' in r['error'] and not req.exists(), r
+        ok += 1
+        print(f'PASS ({ver}) {len(many) - 1} recipe files: FAILED before sending ("{r["error"]}")')
+        w.close()
     return ok
 
 
@@ -191,7 +252,7 @@ def main():
         subprocess.run([str(jb / 'javac'), '-source', '11', '-target', '11', '-Xlint:-options', '-encoding', 'UTF-8',
                         '-d', str(classes)] + src + [str(APP / 'tests' / 'CopyJobDriver.java')], check=True)
         n = run_suite(lupa.lua54, classes, jb / 'java') + run_suite(lupa.lua55, classes, jb / 'java')
-    print(f'{n}/12 PASS. The app\'s copy job against the real game script; synthetic archive; Lua 5.4 and 5.5; no game data.')
+    print(f'{n}/18 PASS. The app\'s copy job against the real game script; synthetic archive; Lua 5.4 and 5.5; no game data.')
 
 
 if __name__ == '__main__':

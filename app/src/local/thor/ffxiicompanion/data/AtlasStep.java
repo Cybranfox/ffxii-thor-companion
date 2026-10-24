@@ -10,6 +10,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -48,6 +49,8 @@ final class AtlasStep {
     static final String ICON_ATLAS = "ps2data/image/ff12/myoshiok/us/tm2_menu/loca_8_c.tm2";
     static final String FLAGROM = "ps2data/image/ff12/us/bin/mapjumpgroupflagrom.bin";
     static final int ICON_TYPES = 29, TILE = 64;
+    /** NAV records are indexed by map id (1,154 in the shipped game); far more is a broken file, not a bigger game. */
+    static final int MAX_NAV = 65536;
     static final String NOTE = "Coverage masks from the user's own game files, for personal use on their device. No tint.";
 
     /** Builds the atlas; returns the output files (index.json, regions.json, files.json, PNGs) in write order. */
@@ -70,7 +73,7 @@ final class AtlasStep {
             for (Object[] s : symbolImages(src.read(ICON_ATLAS))) {
                 int typ = (Integer) s[0], w = (Integer) s[1], h = (Integer) s[2];
                 byte[] rgba = (byte[]) s[3], png = Png.encode(4, w, h, rgba);
-                String fn = String.format("icons/type_%02d.png", typ);
+                String fn = String.format(Locale.ROOT, "icons/type_%02d.png", typ);
                 out.add(new Out(fn, png));
                 symbols.add(map("type", typ, "file", fn, "width", w, "height", h,
                         "pixelEncoding", "RGBA8", "pixelSha256", pixelSha256(4, w, h, rgba)));
@@ -165,7 +168,7 @@ final class AtlasStep {
 
     static String hex(byte[] b) {
         StringBuilder s = new StringBuilder();
-        for (byte x : b) s.append(String.format("%02x", x & 255));
+        for (byte x : b) s.append(String.format(Locale.ROOT, "%02x", x & 255));
         return s.toString();
     }
 
@@ -293,6 +296,7 @@ final class AtlasStep {
     static byte[][] parseNav(byte[] d) throws Bad {
         need(d.length >= 8 && d[0] == 'N' && d[1] == 'A' && d[2] == 'V', "not a NAV file");
         long count = u32(d, 4, d.length);
+        need(count <= MAX_NAV, "NAV record count too large");          // one small array per record: bound the heap
         need(8 + 3 * count == d.length, "NAV size does not match its record count");
         byte[][] recs = new byte[(int) count][];
         for (int i = 0; i < count; i++) recs[i] = Arrays.copyOfRange(d, 8 + 3 * i, 11 + 3 * i);

@@ -17,6 +17,12 @@ import java.util.Map;
  */
 public final class DataBuilder {
     /**
+     * BUILD_INFO's "builder" for packs this builder makes. Change it only when the output changes: the app then rebuilds
+     * from the copied files it keeps (no copy, no game). PC-built packs say the PC builder's version instead.
+     */
+    public static final String VERSION = "app-1";
+
+    /**
      * The game's own menu labels (an st2e file, like menu_mapname). The licence screens look board j's title up by
      * row (text key 1005 + j: group 1, row 5 + j; Job_Names_2026-10-24.md), and those rows carry ids 10100 + j.
      */
