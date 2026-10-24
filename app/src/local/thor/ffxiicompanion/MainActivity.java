@@ -175,6 +175,18 @@ public class MainActivity extends Activity {
         setContentView(buildUi());
     }
 
+    /**
+     * Focusable only while this is the top resumed activity (the bottom screen has focus, e.g. just after launch): keys
+     * go to this display then anyway, and a non-focusable window there makes any key (the Odin settings app injects a
+     * Right Shift when it switches the controller's display) wait 5 s for a window and end in "isn't responding". Once
+     * the game is on top, back to non-focusable, so a tap here doesn't take the controller from it.
+     */
+    @Override public void onTopResumedActivityChanged(boolean top) {
+        super.onTopResumedActivityChanged(top);
+        if (top) getWindow().clearFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        else getWindow().addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+    }
+
     @Override protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         super.onDestroy();
