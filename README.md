@@ -24,21 +24,22 @@ There are three pieces, and each only does its own job:
    it as small JSON files to `Download/FFXII_companion/live` on the device. It comes inside the app: a small **loader**
    (`ThorCompanion.lua`), installed once, checks the script's signature at every game start and only runs a genuine,
    current copy. So after the first install, **updating is just installing the new app**.
-3. **The data builder** (PC, Python) builds names, licence boards and map sheets from **your own** game files. You run it
-   once and copy its output to the Thor.
+3. **Your game data** (names, licence boards, map sheets) is built from **your own** game files, on the Thor: the game
+   script copies the files it needs while you play (about 5 minutes) and the app builds the data. A PC data builder is
+   still available as an alternative.
 
-**[▶ Watch the 90-second demo](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.9.0-beta/FFXII_Thor_Companion_launch_0.9.0-beta.mp4)** · Install guide: **[docs/INSTALL.md](docs/INSTALL.md)**
+**[▶ Watch the 0.15 video: setup from a fresh install, then the features](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.15.0-beta/FFXII_Thor_Companion_0.15.0-beta.mp4)** (2 min) · [first demo (0.9)](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.9.0-beta/FFXII_Thor_Companion_launch_0.9.0-beta.mp4) · Install guide: **[docs/INSTALL.md](docs/INSTALL.md)**
 
 ## Requirements
 
 - **AYN Thor** (Android 13) with **GameNative** and **FINAL FANTASY XII THE ZODIAC AGE from Steam, version 1.0.4.0**.
   Other game builds are detected and the companion stays read-only and blank.
 - **Required mods:** ffgriever's [FF12 External File Loader](https://www.nexusmods.com/finalfantasy12/mods/170) and
-  [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171). Tested with LUA Loader 1.7.1.
+  [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171). Tested with LUA Loader 1.7.1 and 2.0.1.
 - **Optional mods** that add text: [Dynamic Equipment Description](https://www.nexusmods.com/finalfantasy12/mods/441)
   with *The Insurgent's Descriptive Inventory* (Equip tab descriptions), and *Foedex Clan Primer Text Replacer* (Bestiary
   tab). Everything else works without them.
-- **A PC with your Steam copy of the game** and Python 3.10+, to run the data builder once.
+- **No PC needed** for the game data any more. (The optional PC data builder needs Python 3.10+.)
 
 No other mods are needed. If you use *The Insurgent's Manifesto*, its 36-slot single gambit list mode is not supported
 by the editor (the editor refuses to run then). Everything else still works.
@@ -52,8 +53,8 @@ by the editor (the editor refuses to run then). Everything else still works.
 - The game script never opens a network connection. It only writes inside `Download/FFXII_companion/`.
 - The only keys involved are the developer's game-script signing keys (kept passphrase-encrypted, never in this
   repository); the app and the loader carry only their public halves. They prove a release is genuine, not who you are.
-- The data builder reads your local game files and writes a local folder. The only network use is the first-run
-  `pip install` of numpy and Pillow from PyPI into a private folder next to the builder.
+- The game data is built from your local game files, on the Thor or with the optional PC builder, and stays local. The
+  PC builder's only network use is the first-run `pip install` of numpy and Pillow from PyPI into a private folder.
 - Nothing is uploaded anywhere. Your saves are never read as files and never written.
 
 ## Permissions, limitations and security considerations
@@ -88,11 +89,11 @@ by the editor (the editor refuses to run then). Everything else still works.
 
 ## Install / remove (short version)
 
-Install:
-1. Run the **data builder** on your PC, then copy `FFXII_companion` into the Thor's `Download` folder.
-2. Install the **APK** on the Thor and open it once. Grant "All files access" when asked. It puts the loader, the signed
-   game script and the installer in `Download/FFXII_companion/install`.
-3. Once only: in GameNative, open the game's container and run `D:\FFXII_companion\install\install.cmd`. Then play.
+Install (the app's Setup card walks you through it and shows the next step):
+1. Install the **APK** on the Thor, open it on the bottom screen and tap **Allow file access**. It puts the loader, the
+   signed game script and the installer in `Download/FFXII_companion/install`.
+2. Once only: in GameNative, open the game's container and run `D:\FFXII_companion\install\install.cmd`.
+3. Tap **Start FFXII**, then **Build game data**. The game data builds itself while you play (about 5 minutes).
 
 Update: install the new APK over the old one and restart the game. That's it.
 

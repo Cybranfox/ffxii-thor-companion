@@ -1,13 +1,27 @@
 # Changelog
 
 ## 0.15.0-beta
+- **No PC needed any more.** The app now builds your game data (names, licence boards, maps) on the Thor, from your
+  own game files. Tap **Build game data**, start the game, and the game script copies what it needs a little at a time
+  while you play or sit at the title screen. About 5 minutes, it pauses during fights, and it picks up where it left off
+  if you quit. The app then builds, checks and swaps the data in on its own. The PC data builder still works if you
+  prefer it.
+- **Setup card.** A first-run checklist on the Status page: file access, setup files, game loaders, game script and
+  game data, each with a tick and the one button you need next ("Allow file access", "Start FFXII", "Build game data").
+  It tells you to run install.cmd if the loader has never run, says "All set" when you're done, then gets out of the
+  way. You can open it again any time from Details › Setup checks.
+- **Start FFXII button.** Launches the game straight from the companion (the same way Cocoon does), instead of just
+  opening GameNative's library.
+- **Game data card** on the Status page shows whether your data is ready, being copied or being built, with a
+  Rebuild button.
 - **Works with LUA Script Loader 2.0.1.** The loader file the companion installs now runs on ffgriever's new loader
   (and still on 1.7.1). If you switch to 2.0.1, run install.cmd once more.
-- **Groundwork for no-PC updates.** The game script can now copy the game files the map data needs, in small bits
-  while you play, when the app asks it to. The app part comes next; nothing changes for you yet.
-- **Map data format 2.** The map data now records what each picture looks like instead of the exact file, so the
-  phone will be able to build the map data itself later, without a PC. Your current map data still works; nothing to
-  re-run. If you do re-run the data builder, update the app first: older apps can't read the new format.
+- **Map data format 2.** The map data now records what each picture looks like instead of the exact file, which is
+  what lets the phone build it. Your current map data still works. If you re-run the PC data builder, update the app
+  first: older apps can't read the new format.
+- Fixed: an "isn't responding" message on the bottom screen right after the app opened (the Thor's own settings app
+  sends a key press when it switches the controller between screens).
+- Fixed: the Targeting card said "Enemy" instead of the enemy's name unless you'd opened another tab first.
 
 ## 0.14.0-beta
 - **Story hint.** The Location card shows the game's own "where to go next" line, the one at the bottom of the
