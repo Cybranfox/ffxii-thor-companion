@@ -74,6 +74,21 @@ public class DataOwnerTest {
                         && "new".equals(get(new File(base, "reference/reference.json"))) && !new File(base, ".swap.json").exists(),
                 "obstacle gone: the next tick finishes the swap, the new pack is whole and readable");
 
+        // the pack verdict is recomputed when any pack file changes, not only a few of them (review 1)
+        File pv = new File(out, "verdict");
+        put(new File(pv, "atlas/index.json"), "{}");
+        put(new File(pv, "reference/reference.json"), "{}");
+        put(new File(pv, "reference/boards.json"), "{}");
+        DataOwner q = new DataOwner(pv, threads);
+        check(q.packVerdict() == null, "before the first check: no verdict (the setup screen says not checked yet)");
+        q.await(() -> q.step(null));
+        DataOwner.PackVerdict first = q.packVerdict();
+        q.await(() -> q.step(null));
+        check(first != null && q.packVerdict() == first, "nothing changed: the verdict isn't recomputed (no rehashing every tick)");
+        new File(pv, "reference/boards.json").delete();
+        q.await(() -> q.step(null));
+        check(q.packVerdict() != first, "boards.json deleted: the verdict is recomputed");
+
         // a request refusal left over from another copy doesn't fail a new one
         File c = new File(out, "stale");
         DataOwner p = new DataOwner(c, threads);

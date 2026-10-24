@@ -28,6 +28,8 @@ import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 
+import local.thor.ffxiicompanion.data.CopyJob;
+
 
 /**
  * The companion's one screen, on the Thor's bottom display. Polls the two A/B snapshot files the game script writes to
@@ -136,6 +138,14 @@ public class MainActivity extends Activity {
     DataOwner data;
     int seenInstalls, seenFailures;
     TextView dataLine, dataButton;
+    LinearLayout setupCard, setupRows;
+    TextView setupButton;
+    SetupFlow.Action setupShown = SetupFlow.Action.NONE;
+    boolean setupOpen;
+    Map<String, Object> bundledSig;
+    Boolean assetsComplete;
+    long probedAt = Long.MIN_VALUE / 2;
+    boolean probeOk;
     android.widget.ProgressBar dataBar;
     DataStatus.Action dataShown = DataStatus.Action.NONE;
     static final String PACK_HELD = "Finishing a game data update…";
@@ -276,6 +286,22 @@ public class MainActivity extends Activity {
         referenceMissing.setVisibility(View.GONE);
         root.addView(referenceMissing, new LinearLayout.LayoutParams(-1, 0, 1));
 
+        // 0.16.0 Setup: five ordered checks, one action for the first problem (SetupFlow); shown on first run, when a
+        // durable problem comes back, or from Details.
+        setupCard = cardShell();
+        setupCard.addView(cardHeading("SETUP"));
+        setupRows = new LinearLayout(this);
+        setupRows.setOrientation(LinearLayout.VERTICAL);
+        setupCard.addView(setupRows);
+        setupButton = pageButton("");
+        setupButton.setVisibility(View.GONE);
+        setupButton.setOnClickListener(x -> setupAction());
+        LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(-2, -2);
+        sbp.topMargin = dp(6);
+        setupCard.addView(setupButton, sbp);
+        setupCard.setVisibility(View.GONE);
+        body.addView(setupCard, cardParams(-1, 0));
+
         // Location: area name large on one line, then where from / ids.
         locationCard = cardShell();
         LinearLayout locHead = new LinearLayout(this);
@@ -395,6 +421,10 @@ public class MainActivity extends Activity {
         mods = card(row2, "Mods");
         build = card(row2, "Game build");
         details.addView(row2);
+        TextView setupLink = text("Setup checks", 14, ACCENT, true);
+        setupLink.setPadding(dp(8), dp(8), dp(8), dp(8));
+        setupLink.setOnClickListener(x -> { setupOpen = !setupOpen; if (lastView != null) showSetup(lastView); });
+        details.addView(setupLink);
         body.addView(details);
         updateDetailsToggle();
         styleTabs();
@@ -581,6 +611,113 @@ public class MainActivity extends Activity {
         if (label != null) dataButton.setText(label);
     }
 
+    /** 0.16.0: the Setup card, from SetupFlow over what the app observes now (SetupInputs). */
+    void showSetup(ReceiverState.View v) {
+        SetupInputs.Obs o = new SetupInputs.Obs();
+        o.supported = android.os.Build.VERSION.SDK_INT >= 30;
+        o.storageGranted = fixtureMode || Environment.isExternalStorageManager();
+        long now = SystemClock.elapsedRealtime();
+        if (o.storageGranted && now - probedAt > 30_000) {            // a real write + read in the shared folder
+            probedAt = now;
+            File probe = new File(DATA_DIR, ".probe");
+            try {
+                java.nio.file.Files.write(probe.toPath(), new byte[] {1});
+                probeOk = java.nio.file.Files.readAllBytes(probe.toPath()).length == 1;
+            } catch (Exception e) {
+                probeOk = false;
+            }
+            probe.delete();
+        }
+        o.readable = o.writable = o.storageGranted && probeOk;
+        if (assetsComplete == null) {
+            try {
+                java.util.List<String> have = java.util.Arrays.asList(getAssets().list("install"));
+                try (java.io.InputStream in = getAssets().open("install/ThorCompanion-core.sig")) {
+                    byte[] sig = new byte[4096];
+                    int n = 0, r;
+                    while (n < sig.length && (r = in.read(sig, n, sig.length - n)) > 0) n += r;
+                    bundledSig = SetupInputs.parseSig(new String(sig, 0, n, StandardCharsets.UTF_8));
+                }
+                assetsComplete = SetupInputs.assetsComplete(have, bundledSig);
+            } catch (Exception e) {
+                assetsComplete = false;
+            }
+        }
+        o.assetsComplete = assetsComplete;
+        o.installSynced = installSynced;
+        o.bundledSig = bundledSig;
+        o.loaderStatus = DataFiles.jsonObject(new File(dir, "loader_status.json"), LoaderStatus.MAX_BYTES);
+        o.transport = v.transport.name();
+        o.accepted = v.current != null && !v.current.synthetic;
+        o.synthetic = v.current != null && v.current.synthetic;
+        Map<String, Object> hello = v.current != null ? Json.obj(v.current.data, "hello") : null;
+        o.buildSupported = v.transport == ReceiverState.Transport.LIVE && hello != null ? Reveal.buildVerified(hello) : null;
+        o.snapshotData = v.current != null ? v.current.data : null;
+        DataOwner.PackVerdict pv = data.packVerdict();
+        o.packChecked = pv != null;
+        o.packPresent = pv != null && pv.present;
+        o.packProblem = pv != null ? pv.problem : null;
+        o.atlasFormat = pv != null ? pv.atlasFormat : null;
+        o.packReadable = data.packReadable();
+        o.building = data.building();
+        CopyJob job = CopyJob.load(DATA_DIR);
+        boolean copying = job != null && (job.phase() == CopyJob.Phase.HEADER || job.phase() == CopyJob.Phase.DATA
+                || job.phase() == CopyJob.Phase.CONFIG);
+        o.jobId = copying ? job.jobId() : null;
+        o.rawcopy = v.current != null ? Json.obj(v.current.data, "rawcopy") : null;
+        android.content.SharedPreferences prefs = getSharedPreferences("setup", MODE_PRIVATE);
+        o.completedRevision = prefs.getInt("completedRevision", 0);
+
+        SetupFlow.View view = SetupFlow.evaluate(SetupInputs.build(o));
+        if (view.shouldPersistCompletion) prefs.edit().putInt("completedRevision", SetupInputs.REVISION).apply();
+        setupCard.setVisibility(view.needsOnboarding || setupOpen ? View.VISIBLE : View.GONE);
+        if (setupCard.getVisibility() != View.VISIBLE) return;
+        setupRows.removeAllViews();
+        for (SetupFlow.Step st : view.steps) {
+            String mark = st.state == SetupFlow.State.OK ? "\u2713 " : st.state == SetupFlow.State.MISSING ? "! " : "? ";
+            int color = st.state == SetupFlow.State.OK ? GOOD : st.state == SetupFlow.State.MISSING ? BAD : DIM;
+            TextView row = text(mark + SetupText.title(st.id) + ": " + SetupText.line(st.messageKey), 14, color, false);
+            row.setPadding(0, dp(2), 0, dp(2));
+            setupRows.addView(row);
+        }
+        setupShown = view.firstBlocker != null ? view.firstBlocker.action : SetupFlow.Action.NONE;
+        String label = SetupText.label(setupShown);
+        setupButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
+        if (label != null) setupButton.setText(label);
+    }
+
+    static final String INSTALL_URL = "https://github.com/Cybranfox/ffxii-thor-companion/blob/main/docs/INSTALL.md";
+    static final String RELEASES_URL = "https://github.com/Cybranfox/ffxii-thor-companion/releases";
+
+    /** The Setup card's one button. Opens things on the top screen, where the game and the browser belong. */
+    void setupAction() {
+        android.os.Bundle top = android.app.ActivityOptions.makeBasic()
+                .setLaunchDisplayId(android.view.Display.DEFAULT_DISPLAY).toBundle();
+        try {
+            switch (setupShown) {
+                case GRANT_STORAGE: grant.performClick(); break;
+                case SYNC_INSTALL: installSynced = false; break;              // the next refresh syncs again
+                case OPEN_GAME_NATIVE: {
+                    Intent i = getPackageManager().getLaunchIntentForPackage("app.gamenative");
+                    startActivity(i != null ? i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) : web(INSTALL_URL), top);
+                    break;
+                }
+                case SHOW_SETUP_STEPS:
+                case REINSTALL_BOOTSTRAP: startActivity(web(INSTALL_URL), top); break;
+                case UPDATE_APP: startActivity(web(RELEASES_URL), top); break;
+                case START_BUILD:
+                case RETRY_BUILD: data.startCopy("g" + Long.toString(System.currentTimeMillis() / 1000, 36)); break;
+                default: break;
+            }
+        } catch (RuntimeException e) {                                    // no browser, a vanished package, ...
+            Toast.makeText(this, "Couldn't open that here: see " + INSTALL_URL, Toast.LENGTH_LONG).show();
+        }
+    }
+
+    static Intent web(String url) {
+        return new Intent(Intent.ACTION_VIEW, Uri.parse(url)).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+    }
+
     /** The card's button: a new copy (Build game data / Try again / Rebuild); DataOwner does the rest. */
     void dataAction() {
         if (dataShown == DataStatus.Action.NONE) return;
@@ -758,6 +895,7 @@ public class MainActivity extends Activity {
         dataEvents();
         render(v);
         showData(v);
+        showSetup(v);
         data.tick(v.current != null ? Json.obj(v.current.data, "rawcopy") : null);
         closeAfterExit(v.transport == ReceiverState.Transport.LIVE,
                 v.transport == ReceiverState.Transport.GAME_CLOSED, v.synthetic);

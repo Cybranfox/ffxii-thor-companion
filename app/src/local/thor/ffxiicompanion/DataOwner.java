@@ -34,6 +34,24 @@ final class DataOwner {
     private volatile String failedGen;          // the copy whose build failed (not retried by itself)
     private String unmarkedGen;                 // owner thread only
     private long lastBeat;
+    /** The live pack, as last checked: null until the first check has run (the setup screen says "not checked yet"). */
+    static final class PackVerdict {
+        final boolean present;
+        final String problem;     // null: usable (PackCheck, any builder)
+        final String atlasFormat; // Atlas.FORMAT / FORMAT_2, or null
+
+        PackVerdict(boolean present, String problem, String atlasFormat) {
+            this.present = present;
+            this.problem = problem;
+            this.atlasFormat = atlasFormat;
+        }
+    }
+
+    /** A full re-check this often even when nothing seems changed (a same-size, same-time replacement). */
+    static final long PACK_RECHECK_MS = 30 * 60 * 1000L;
+    private volatile PackVerdict verdict;
+    private String packStamp;                   // owner thread only: what the verdict was computed for
+    private long packCheckedAt;
 
     DataOwner(File base, ThreadFactory threads) {
         this.base = base;
@@ -60,6 +78,9 @@ final class DataOwner {
     String lastFailure() { return lastFailure; }
 
     String failedGen() { return failedGen; }
+
+    /** The live pack's last verdict (every file present and every picture hashed), or null before the first check. */
+    PackVerdict packVerdict() { return verdict; }
 
     /** Recovery or copy-job trouble that's still there (null when fine). */
     String problem() { return problem; }
@@ -103,6 +124,7 @@ final class DataOwner {
                 return;                                  // tried again on the next tick; nothing reads the pack meanwhile
             }
         }
+        checkPack();
         CopyJob job = CopyJob.load(base);
         if (job == null) return;
         try {
@@ -125,6 +147,35 @@ final class DataOwner {
         } catch (IOException e) {
             problem = "Copy: " + e.getMessage();
         }
+    }
+
+    /**
+     * The live pack's verdict for the setup screen. Hashing ~10 MB of PNGs, so only when any pack file changed (name,
+     * size or time, every file of atlas/ and reference/ plus BUILD_INFO) and, to catch a same-size same-time
+     * replacement, every PACK_RECHECK_MS anyway.
+     */
+    private void checkPack() {
+        String stamp = installs + "|" + inventory(new File(base, "atlas")) + "|" + inventory(new File(base, "reference"))
+                + "|" + inventory(new File(base, "BUILD_INFO.json"));
+        long now = System.currentTimeMillis();
+        if (stamp.equals(packStamp) && now - packCheckedAt < PACK_RECHECK_MS) return;
+        packStamp = stamp;
+        packCheckedAt = now;
+        File index = new File(base, "atlas/index.json");
+        boolean present = index.isFile() || new File(base, "reference/reference.json").isFile();
+        String format = new File(base, "atlas/files.json").isFile() ? Atlas.FORMAT_2 : index.isFile() ? Atlas.FORMAT : null;
+        verdict = new PackVerdict(present, present ? PackCheck.problem(base, false) : "no game data", format);
+    }
+
+    /** Names, sizes and times of every file under f (a cheap change detector; sorted so the order is stable). */
+    private static String inventory(File f) {
+        if (f.isFile()) return f.getName() + ":" + f.length() + ":" + f.lastModified();
+        File[] kids = f.listFiles();
+        if (kids == null) return "-";
+        java.util.Arrays.sort(kids);
+        StringBuilder s = new StringBuilder();
+        for (File k : kids) s.append(inventory(k)).append(',');
+        return Integer.toHexString(s.toString().hashCode()) + ":" + s.length();
     }
 
     private void build(CopyJob job) {

@@ -47,6 +47,12 @@ public class PackBuildTest {
         for (String f : new String[] {"atlas/files.json", "atlas/index.json", "atlas/regions.json", "reference/reference.json", "BUILD_INFO.json"})
             put(new File(junk, f), "{not json");
         check(PackCheck.problem(junk) != null, "garbage files: refused (" + PackCheck.problem(junk) + ")");
+        File legacy = new File(out, "legacy");                   // a synthetic atlas-1 index + regions, no pictures
+        Files.createDirectories(new File(legacy, "atlas").toPath());
+        Files.copy(new File("tests/fixtures/atlas/index.json").toPath(), new File(legacy, "atlas/index.json").toPath());
+        Files.copy(new File("tests/fixtures/atlas/regions.json").toPath(), new File(legacy, "atlas/regions.json").toPath());
+        String lp = PackCheck.problem(legacy, false);
+        check(lp != null && lp.contains("missing or damaged"), "atlas-1 pack without its pictures: refused (" + lp + ") (review 2)");
         if (args.length >= 5 && new File(args[1], "manifest.json").isFile() && new File(args[2], "extra.json").isFile()
                 && new File(args[3], "BUILD_INFO.json").isFile()) {
             golden(out, Paths(args[1]), Paths(args[2]), Paths(args[3]), new File(args[4]));
@@ -166,6 +172,8 @@ public class PackBuildTest {
         File good = new File(out, "good");
         copyPack(base, good);
         check(PackCheck.problem(good) == null, "PackCheck: the built pack passes");
+        check(PackCheck.problem(pyPack.toFile()) != null && PackCheck.problem(pyPack.toFile(), false) == null,
+                "PackCheck: the PC builder's pack isn't a new build of this app's, but is a usable live pack (setup screen)");
         damage(good, out, "png", d -> { File f = firstPng(new File(d, "atlas")); byte[] b = Files.readAllBytes(f.toPath()); b[b.length / 2] ^= 1; Files.write(f.toPath(), b); });
         damage(good, out, "files", d -> new File(d, "atlas/files.json").delete());
         damage(good, out, "regions", d -> Files.copy(v1Regions.toPath(), new File(d, "atlas/regions.json").toPath(), StandardCopyOption.REPLACE_EXISTING));

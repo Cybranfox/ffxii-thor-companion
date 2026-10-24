@@ -18,17 +18,36 @@ final class PackCheck {
 
     private PackCheck() {}
 
-    /** Null when the pack in dir (atlas/, reference/, BUILD_INFO.json) is usable; otherwise the first problem. */
-    static String problem(File dir) {
+    /** A new build from this app's builder (atlas 2, BUILD_INFO "builder" = DataBuilder.VERSION): null when usable. */
+    static String problem(File dir) { return problem(dir, true); }
+
+    /**
+     * Null when the pack in dir (atlas/, reference/, BUILD_INFO.json) is usable; otherwise the first problem.
+     * newBuild: this app's own fresh build (atlas 2 and its builder only); false for the live pack the setup screen
+     * checks, which may also come from the PC builder or be an older atlas 1 pack (no picture receipt to check).
+     */
+    static String problem(File dir, boolean newBuild) {
         File atlasDir = new File(dir, "atlas"), ref = new File(dir, "reference");
         AtlasFiles files = AtlasFiles.parse(text(new File(atlasDir, "files.json"), AtlasFiles.MAX_BYTES));
-        if (files == null) return "atlas/files.json missing or unreadable";
-        Atlas atlas = Atlas.parse(text(new File(atlasDir, "index.json"), Atlas.MAX_INDEX_BYTES), files);
-        if (atlas == null || atlas.version != 2) return "atlas/index.json unreadable";
+        String index = text(new File(atlasDir, "index.json"), Atlas.MAX_INDEX_BYTES);
+        boolean v1 = !newBuild && files == null && index != null && index.contains(Atlas.FORMAT);
+        if (files == null && !v1) return "atlas/files.json missing or unreadable";
+        Atlas atlas = Atlas.parse(index, files);
+        if (atlas == null || atlas.version != (v1 ? 1 : 2)) return "atlas/index.json unreadable";
         Regions regions = Regions.parse(text(new File(atlasDir, "regions.json"), Regions.MAX_BYTES), files);
         if (regions == null || regions.version != atlas.version) return "atlas/regions.json unreadable or from another run";
+        if (v1) {                                   // atlas 1: no receipt, but its index and regions carry each sha256
+            for (Atlas.Sheet s : atlas.allSheets()) {
+                String p = picture(atlasDir, s.file, s.sha256);
+                if (p != null) return p;
+            }
+            for (Regions.Symbol s : regions.symbols.values()) {
+                String p = picture(atlasDir, s.file, s.sha256);
+                if (p != null) return p;
+            }
+        }
         int sheets = 0;
-        for (Map.Entry<String, String> e : files.all().entrySet()) {
+        if (!v1) for (Map.Entry<String, String> e : files.all().entrySet()) {
             byte[] png = DataFiles.readBytes(new File(atlasDir, e.getKey()), MAX_PNG);
             try {
                 if (png == null || !Inputs.sha256(png).equals(e.getValue())) return "atlas/" + e.getKey() + " missing or damaged";
@@ -37,7 +56,7 @@ final class PackCheck {
             }
             if (!e.getKey().startsWith("icons/")) sheets++;
         }
-        if (sheets != atlas.sheetCount) return "atlas/index.json and files.json disagree";
+        if (!v1 && sheets != atlas.sheetCount) return "atlas/index.json and files.json disagree";
         if (Reference.parse(text(new File(ref, "reference.json"), Reference.MAX_BYTES)) == null) return "reference.json unreadable";
         LicenceBoards boards = LicenceBoards.parse(DataFiles.jsonObject(new File(ref, "boards.json"), 512 * 1024));
         if (boards == null || boards.boards.size() != 12) return "boards.json unreadable";
@@ -46,7 +65,19 @@ final class PackCheck {
         File obj = new File(ref, "objectives.json");
         if (obj.exists() && Objectives.parse(DataFiles.jsonObject(obj, Objectives.MAX_BYTES)) == null) return "objectives.json unreadable";
         Map<String, Object> info = DataFiles.jsonObject(new File(dir, "BUILD_INFO.json"), 64 * 1024);
-        if (info == null || !DataBuilder.VERSION.equals(info.get("builder"))) return "BUILD_INFO.json missing or from another builder";
+        if (info == null || newBuild && !DataBuilder.VERSION.equals(info.get("builder"))) return "BUILD_INFO.json missing or from another builder";
+        return null;
+    }
+
+    /** Null when atlas/file is there and hashes to sha256; else the problem. */
+    private static String picture(File atlasDir, String file, String sha256) {
+        if (file == null || sha256 == null) return "atlas index names a picture without its hash";
+        byte[] png = DataFiles.readBytes(new File(atlasDir, file), MAX_PNG);
+        try {
+            if (png == null || !Inputs.sha256(png).equals(sha256)) return "atlas/" + file + " missing or damaged";
+        } catch (java.io.IOException x) {
+            return "can't hash atlas/" + file;
+        }
         return null;
     }
 

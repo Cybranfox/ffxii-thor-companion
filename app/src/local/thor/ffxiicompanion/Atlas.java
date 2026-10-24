@@ -54,6 +54,9 @@ final class Atlas {
 
     Sheet sheet(String file) { return byFile.get(file); }
 
+    /** Every sheet (PackCheck hashes each atlas-1 picture against the sha256 its index carries). */
+    java.util.Collection<Sheet> allSheets() { return byFile.values(); }
+
     Integer slot(Sheet s) { return s == null ? null : s.slot; }
 
     List<Sheet> sheets(int mapId) {

@@ -25,7 +25,9 @@ else
 fi
 "$BT/aapt2" link -o build/base.apk -I "$JAR" --manifest AndroidManifest.xml
 "${JAVA_BIN}javac" -source 11 -target 11 -Xlint:-options -encoding UTF-8 -cp "$JAR" -d build/classes $(find src -name '*.java')
-"$BT/d8$EXE" --release --min-api 30 --lib "$JAR" --output build/dex $(find build/classes -name '*.class')
+# One jar for d8: listing every class file overflows the Windows command line.
+(cd build/classes && "${JAVA_BIN}jar" cf ../classes.jar .)
+"$BT/d8$EXE" --release --min-api 30 --lib "$JAR" --output build/dex build/classes.jar
 (cd build/dex && "${JAVA_BIN}jar" uf ../base.apk classes.dex)
 # Assets via jar, not aapt2 -A: aapt2 on Windows stores asset paths with backslashes, which Android cannot open.
 (cd build && "${JAVA_BIN}jar" uf base.apk assets)

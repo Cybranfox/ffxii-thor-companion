@@ -11,6 +11,11 @@
     <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
 
+    <!-- 0.16.0: the setup screen's "Open GameNative" button. Android 11+ hides other apps unless they're named here. -->
+    <queries>
+        <package android:name="app.gamenative" />
+    </queries>
+
     <application
         android:label="FFXII Companion"
         android:icon="@android:drawable/ic_menu_compass"
