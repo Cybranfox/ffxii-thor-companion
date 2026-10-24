@@ -30,7 +30,7 @@ The companion only reads files these mods write or install on the user's machine
 ## AI assistance
 
 This project was built with substantial help from AI coding assistants, which wrote much of the code and research
-tooling under the author's direction. Every feature was tested on real hardware (an AYN Thor) before release.
+tooling under the my direction. Every feature was tested on real hardware (an AYN Thor) before release.
 
 ## Tools used to build and test (not distributed with the app)
 - Python with **numpy** (BSD-3-Clause) and **Pillow** (MIT-CMU) in the data builder; **Capstone** disassembler (BSD-3-Clause) for read-only static analysis during research; **lupa** (MIT) to run the Lua script in tests; **imageio-ffmpeg** (BSD-2-Clause) bundling **FFmpeg** (LGPL/GPL) to assemble the showcase video; the Android SDK and a JDK.
