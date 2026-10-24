@@ -6,6 +6,8 @@ import android.graphics.Canvas;
 import android.graphics.ColorMatrix;
 import android.graphics.ColorMatrixColorFilter;
 import android.graphics.Paint;
+import android.graphics.PorterDuff;
+import android.graphics.PorterDuffXfermode;
 import android.graphics.Rect;
 import android.graphics.RectF;
 import android.graphics.Typeface;
@@ -65,6 +67,9 @@ final class RevealMapView extends View {
     private final Paint labelHalo = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Float markerPx, markerPy;
     private boolean markerLive;
+    private final Map<Regions.Part, Bitmap> fog = new java.util.IdentityHashMap<>();   // 0.16.0: soft edges per part
+    private final Map<String, Object[]> fogCache = new java.util.HashMap<>();           // sheet -> {cells, bitmap or null}
+    private final Paint fogPaint = new Paint(Paint.FILTER_BITMAP_FLAG);
     private final Rect src = new Rect();
     private final RectF dst = new RectF();
     private final List<RectF> taken = new ArrayList<>();
@@ -81,6 +86,7 @@ final class RevealMapView extends View {
                   float labelSp, boolean interactive) {
         super(c);
         this.interactive = interactive;
+        fogPaint.setXfermode(new PorterDuffXfermode(PorterDuff.Mode.DST_IN));
         focusPaint.setColorFilter(tint(focusTone));
         otherPaint.setColorFilter(tint(otherTone));
         linkPaint.setColor(linkColor);
@@ -149,7 +155,7 @@ final class RevealMapView extends View {
         // 0.16.0: pinching out past "this area" carries on into the whole region (it used to stop at the area's fit)
         if (areaFit && zoom * f < MIN_ZOOM) {
             float[] a = fitView(true), r = fitView(false);
-            if (a != null && r != null) {
+            if (a != null && r != null && r[0] < a[0]) {   // only when the region view is wider (else stay put)
                 float total = a[0] * zoom;                       // keep the picture where it is while switching
                 panX += (r[1] - a[1]) * total;
                 panY += (r[2] - a[2]) * total;
@@ -203,6 +209,18 @@ final class RevealMapView extends View {
         this.shown = v != null ? v.symbols : new ArrayList<>();
         this.masks = masks;
         this.sample = sample;
+        fog.clear();
+        Map<String, Object[]> keep = new java.util.HashMap<>();
+        for (Regions.Part p : this.parts) {
+            boolean[][] cells = p.revealed != null ? p.revealed : p.visible;
+            if (p.sheet == null || cells == null) continue;
+            Object[] c = fogCache.get(p.sheet.file);             // rebuilt only when the explored cells change
+            if (c == null || !java.util.Arrays.deepEquals((boolean[][]) c[0], cells)) c = new Object[] { copy(cells), fogBitmap(cells) };
+            keep.put(p.sheet.file, c);
+            if (c[1] != null) fog.put(p, (Bitmap) c[1]);
+        }
+        fogCache.clear();
+        fogCache.putAll(keep);
         String r = v != null ? v.region : null;
         if (interactive && (r == null ? region != null : !r.equals(region))) {
             region = r;
@@ -239,6 +257,24 @@ final class RevealMapView extends View {
             canvas.drawCircle(cx, cy, r, markerRing);
         }
         drawLabels(canvas, scale, ox, oy, d);
+    }
+
+    /** The part's soft-edge alpha, or null when it has no edge (nothing or everything explored: no layer needed). */
+    private static Bitmap fogBitmap(boolean[][] cells) {
+        int[] a = Regions.fogAlpha(cells);
+        if (a == null) return null;
+        boolean edge = false;
+        for (int v : a) if (v == Regions.FOG_EDGE) { edge = true; break; }
+        if (!edge) return null;
+        int[] px = new int[a.length];
+        for (int i = 0; i < a.length; i++) px[i] = a[i] << 24;
+        return Bitmap.createBitmap(px, cells[0].length * 2, cells.length * 2, Bitmap.Config.ARGB_8888);
+    }
+
+    private static boolean[][] copy(boolean[][] c) {
+        boolean[][] o = new boolean[c.length][];
+        for (int i = 0; i < c.length; i++) o[i] = c[i].clone();
+        return o;
     }
 
     /** The unzoomed fit: {scale, centre x, centre y} in layout units, for the area or the whole region; null = nothing. */
@@ -308,14 +344,27 @@ final class RevealMapView extends View {
         if (bm == null) return;
         float tu = TILE * UNITS_PER_PX * scale;
         int ts = TILE / sample;
+        Bitmap soft = fog.get(p);
+        float px0 = ox + p.x * scale, py0 = oy + p.y * scale;
+        RectF area = new RectF(px0, py0, px0 + p.visible[0].length * tu, py0 + p.visible.length * tu);
+        // 0.16.0: soft edges. Draw the explored tiles and the game's edge tiles into a layer, then keep only what the
+        // smoothly scaled fog alpha allows (explored solid, fading out across the edge corners).
+        int layer = soft != null && area.intersects(0, 0, getWidth(), getHeight()) ? canvas.saveLayer(area, null) : -1;
+        boolean[][] cells = p.revealed != null ? p.revealed : p.visible;
         for (int y = 0; y < p.visible.length; y++) {
             for (int x = 0; x < p.visible[y].length; x++) {
-                if (!p.visible[y][x]) continue;
+                boolean edge = layer >= 0 && !p.visible[y][x] && y < cells.length && x < cells[y].length
+                        && !cells[y][x] && Regions.edgeMask(cells, x, y) != 0;
+                if (!p.visible[y][x] && !edge) continue;
                 src.set(x * ts, y * ts, (x + 1) * ts, (y + 1) * ts);
-                float dx = ox + p.x * scale + x * tu, dy = oy + p.y * scale + y * tu;
+                float dx = px0 + x * tu, dy = py0 + y * tu;
                 dst.set(dx, dy, dx + tu, dy + tu);
                 canvas.drawBitmap(bm, src, dst, paint);
             }
+        }
+        if (layer >= 0) {
+            canvas.drawBitmap(soft, null, area, fogPaint);
+            canvas.restoreToCount(layer);
         }
     }
 }

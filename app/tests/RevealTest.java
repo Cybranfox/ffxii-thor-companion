@@ -160,6 +160,19 @@ public final class RevealTest {
             float[] lone = Regions.fit(java.util.Collections.singletonList(fresh), true, 40f, 80f);
             check(lone[0] == 300 && lone[1] == 40 && lone[2] == 364 && lone[3] == 104 &&Regions.fit(java.util.Collections.singletonList(new Regions.Part()), true, null, null) == null,
                     "nothing to fit: null, so nothing is drawn");
+            // 0.16.0: the game's fog edge (0x3C4810), same cases as draft/tools/legacy_audit/fog_edges.py
+            boolean[][] one1 = new boolean[3][3];
+            one1[1][1] = true;
+            boolean[][] far = new boolean[10][10];
+            far[1][1] = true;
+            int edges = 0;
+            for (int y = 0; y < 3; y++) for (int x = 0; x < 3; x++) if (!one1[y][x] && Regions.edgeMask(one1, x, y) != 0) edges++;
+            check(Regions.edgeMask(one1, 2, 1) == 5 && Regions.edgeMask(one1, 0, 1) == 10 && Regions.edgeMask(one1, 2, 2) == 1
+                    && Regions.edgeMask(far, 8, 8) == 0 && edges == 8, "fog edge corners match the game's rule");
+            int[] fa = Regions.fogAlpha(one1);                         // 6 x 6 quarters
+            check(fa.length == 36 && fa[2 * 6 + 2] == Regions.FOG_SOLID && fa[3 * 6 + 3] == Regions.FOG_SOLID
+                    && fa[2 * 6 + 4] == Regions.FOG_EDGE && fa[2 * 6 + 5] == 0 && fa[0] == 0 && fa[1 * 6 + 1] == Regions.FOG_EDGE
+                    && Regions.fogAlpha(new boolean[0][0]) == null, "fog alpha: explored solid, edge corners half, the rest clear");
             ok("exit labels only beside areas the player has visited; old packs have none; full-map fit covers every shown area");
         }
         { // 0.13.0 map symbols: without live flags only always-gated symbols on explored ground; bad entries dropped

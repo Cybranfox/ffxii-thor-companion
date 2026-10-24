@@ -106,6 +106,47 @@ final class Regions {
         boolean focus;
     }
 
+    /**
+     * 0.16.0: the game's fog edge (VA 0x3C4810, Legacy_Audit_2026-10-24.md): an unexplored cell next to explored ones is
+     * drawn in the corners that touch them. Bits: 1 top-left, 2 top-right, 4 bottom-left, 8 bottom-right; a corner counts
+     * when any of the three cells around it (side, side, diagonal) is explored. 0 = not an edge.
+     */
+    static int edgeMask(boolean[][] cells, int x, int y) {
+        return (cell(cells, x - 1, y - 1) || cell(cells, x, y - 1) || cell(cells, x - 1, y) ? 1 : 0)
+                | (cell(cells, x + 1, y - 1) || cell(cells, x + 1, y) || cell(cells, x, y - 1) ? 2 : 0)
+                | (cell(cells, x - 1, y + 1) || cell(cells, x, y + 1) || cell(cells, x - 1, y) ? 4 : 0)
+                | (cell(cells, x + 1, y + 1) || cell(cells, x, y + 1) || cell(cells, x + 1, y) ? 8 : 0);
+    }
+
+    private static boolean cell(boolean[][] c, int x, int y) {
+        return y >= 0 && y < c.length && x >= 0 && x < c[y].length && c[y][x];
+    }
+
+    /** Alpha of explored quarters and of the game's edge corners, for a soft boundary once smoothly scaled up. */
+    static final int FOG_SOLID = 255, FOG_EDGE = 120;
+
+    /**
+     * 0.16.0: a part's fog as alpha per quarter tile (2 x 2 per cell, row-major, width 2 x columns): explored cells solid,
+     * the edge corners of their unexplored neighbours half, the rest clear. Scaled up with filtering, the explored ground
+     * fades out at its edges like the game's map instead of stopping in hard tile steps. Null when the part has no cells.
+     */
+    static int[] fogAlpha(boolean[][] cells) {
+        if (cells == null || cells.length == 0 || cells[0].length == 0) return null;
+        int rows = cells.length, cols = cells[0].length, w = cols * 2;
+        int[] a = new int[w * rows * 2];
+        for (int y = 0; y < rows; y++) {
+            for (int x = 0; x < cols; x++) {
+                int m = cell(cells, x, y) ? 15 : edgeMask(cells, x, y);
+                int v = cell(cells, x, y) ? FOG_SOLID : FOG_EDGE;
+                if ((m & 1) != 0) a[(2 * y) * w + 2 * x] = v;
+                if ((m & 2) != 0) a[(2 * y) * w + 2 * x + 1] = v;
+                if ((m & 4) != 0) a[(2 * y + 1) * w + 2 * x] = v;
+                if ((m & 8) != 0) a[(2 * y + 1) * w + 2 * x + 1] = v;
+            }
+        }
+        return a;
+    }
+
     static final class View {
         final List<Part> parts = new ArrayList<>();
         final List<Link> links = new ArrayList<>();
