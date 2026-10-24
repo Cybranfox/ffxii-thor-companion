@@ -51,7 +51,14 @@ public final class PackSwap {
             }
         }
         File[] all = base.listFiles();
-        if (all != null) for (File d : all) if (d.isDirectory() && d.getName().startsWith(".build-")) deleteTree(d);
+        if (all == null) return;
+        File newest = null;                         // the one rollback copy; older ones are leftovers (a cleanup cut short)
+        for (File d : all) {
+            if (!d.isDirectory()) continue;
+            if (d.getName().startsWith(".build-")) deleteTree(d);
+            else if (d.getName().startsWith(".prev-") && (newest == null || d.lastModified() > newest.lastModified())) newest = d;
+        }
+        for (File d : all) if (d.isDirectory() && d.getName().startsWith(".prev-") && !d.equals(newest)) deleteTree(d);
     }
 
     private static void finish(File base, String id, int renames) throws IOException {

@@ -109,6 +109,16 @@ public class PackSwapTest {
         check(is(base, "old") && !new File(base, ".swap.json").exists() && bad != null && bad.length == 1 && !PackSwap.stage(base, "b1").exists(),
                 "a journal that isn't ours: not acted on (kept as .swap.json.bad-*), live pack untouched, staging removed");
 
+        base = fresh(out, "leftover", true);
+        PackSwap.swap(base, "b1");
+        File stale = new File(base, ".prev-b0");
+        pack(stale, "older");
+        new File(stale, "atlas/index.json").delete();                    // a cleanup the app was killed in
+        stale.setLastModified(new File(base, ".prev-b1").lastModified() - 60_000);
+        PackSwap.recover(base);
+        check(!stale.exists() && is(new File(base, ".prev-b1"), "old") && is(base, "new"),
+                "next start: a half-deleted older .prev is removed, the newest rollback copy kept");
+
         System.out.println(passed + " swap checks passed");
     }
 }

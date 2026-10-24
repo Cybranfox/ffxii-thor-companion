@@ -31,7 +31,8 @@ final class DataOwner {
     private volatile boolean recovered, swapping, building;
     private volatile int installs, failures;
     private volatile String problem, lastFailure;
-    private String failedGen, unmarkedGen;      // owner thread only
+    private volatile String failedGen;          // the copy whose build failed (not retried by itself)
+    private String unmarkedGen;                 // owner thread only
     private long lastBeat;
 
     DataOwner(File base, ThreadFactory threads) {
@@ -57,6 +58,8 @@ final class DataOwner {
     int failures() { return failures; }
 
     String lastFailure() { return lastFailure; }
+
+    String failedGen() { return failedGen; }
 
     /** Recovery or copy-job trouble that's still there (null when fine). */
     String problem() { return problem; }

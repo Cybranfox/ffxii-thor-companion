@@ -135,7 +135,11 @@ public class MainActivity extends Activity {
     /** 0.16.0: the process's one writer of the pack and the copy job (outlives this activity). */
     DataOwner data;
     int seenInstalls, seenFailures;
+    TextView dataLine, dataButton;
+    android.widget.ProgressBar dataBar;
+    DataStatus.Action dataShown = DataStatus.Action.NONE;
     static final String PACK_HELD = "Finishing a game data update…";
+    static final String NO_DATA = "Game data not built yet. See Status → Game data.";
     long restoredFor = -1;
 
     final Runnable poll = new Runnable() {
@@ -355,6 +359,22 @@ public class MainActivity extends Activity {
         huntsCard.setVisibility(View.GONE);
         body.addView(huntsCard, cardParams(-1, 0));
 
+        // 0.16.0: Game data: build it from the game on this device, see where it is, what to do when it stops.
+        LinearLayout dataCard = cardShell();
+        dataCard.addView(cardHeading("GAME DATA"));
+        dataLine = body(dataCard);
+        dataBar = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
+        dataBar.setMax(1000);
+        dataBar.setVisibility(View.GONE);
+        dataCard.addView(dataBar, new LinearLayout.LayoutParams(-1, dp(8)));
+        dataButton = pageButton("");
+        dataButton.setVisibility(View.GONE);
+        dataButton.setOnClickListener(x -> dataAction());
+        LinearLayout.LayoutParams dbp = new LinearLayout.LayoutParams(-2, -2);
+        dbp.topMargin = dp(6);
+        dataCard.addView(dataButton, dbp);
+        body.addView(dataCard, cardParams(-1, 0));
+
         // Secondary diagnostics: collapsed by default, one tap to open (touch only; the window stays non-focusable).
         detailsToggle = text("", 13, ACCENT, true);
         detailsToggle.setPadding(dp(8), dp(8), dp(8), dp(8));
@@ -468,7 +488,7 @@ public class MainActivity extends Activity {
         if (!option(OPT_HUNTS)) return;
         huntsRows.removeAllViews();
         List<Objectives.Entry> js = o != null && ok ? o.journal(Json.obj(s.data, "quests")) : java.util.Collections.emptyList();
-        huntsNote.setText(o == null ? "Needs the game data (run the data builder, see INSTALL)."
+        huntsNote.setText(o == null ? "Needs the game data: see Status → Game data."
                 : !ok ? "Shown while the game is running." : js.isEmpty() ? "No accepted hunts yet." : "");
         huntsNote.setVisibility(huntsNote.getText().length() == 0 ? View.GONE : View.VISIBLE);
         for (Objectives.Entry e : js) {
@@ -538,12 +558,35 @@ public class MainActivity extends Activity {
         if (i == 0) return;
         if (i == 1 || i == 4) { loadReference(); if (i == 4 && lastView != null) showLicences(lastView); return; }
         if (loadReference() == null) {
-            referenceMissing.setText("Game data not installed yet. Build it with the FFXII Companion data builder"
-                    + " on your PC and copy it to Download/FFXII_companion (see INSTALL).");
+            referenceMissing.setText(referenceProblem == PACK_HELD ? PACK_HELD : NO_DATA);
             referenceMissing.setVisibility(View.VISIBLE);
             return;
         }
         (i == 2 ? gearView : bestiaryView).setVisibility(View.VISIBLE);
+    }
+
+    /** 0.16.0: the Game data card, from the copy job, the newest snapshot and DataOwner. */
+    void showData(ReceiverState.View v) {
+        local.thor.ffxiicompanion.data.CopyJob job = local.thor.ffxiicompanion.data.CopyJob.load(DATA_DIR);
+        Map<String, Object> live = v.current != null ? Json.obj(v.current.data, "rawcopy") : null;
+        String builder = data.packReadable() ? PackCheck.builder(DATA_DIR) : null;
+        DataStatus d = DataStatus.of(job, live, v.transport == ReceiverState.Transport.LIVE, data.building(),
+                data.packReadable(), builder, data.failedGen(), data.lastFailure());
+        dataLine.setText(d.line);
+        dataBar.setVisibility(d.progress >= 0 ? View.VISIBLE : View.GONE);
+        if (d.progress >= 0) dataBar.setProgress((int) Math.round(d.progress * 1000));
+        dataShown = d.action;
+        String label = DataStatus.label(d.action);
+        dataButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
+        if (label != null) dataButton.setText(label);
+    }
+
+    /** The card's button: a new copy (Build game data / Try again / Rebuild); DataOwner does the rest. */
+    void dataAction() {
+        if (dataShown == DataStatus.Action.NONE) return;
+        data.startCopy("g" + Long.toString(System.currentTimeMillis() / 1000, 36));
+        dataButton.setVisibility(View.GONE);
+        dataLine.setText("Starting…");
     }
 
     /**
@@ -714,6 +757,7 @@ public class MainActivity extends Activity {
                 SystemClock.elapsedRealtime(), System.currentTimeMillis());
         dataEvents();
         render(v);
+        showData(v);
         data.tick(v.current != null ? Json.obj(v.current.data, "rawcopy") : null);
         closeAfterExit(v.transport == ReceiverState.Transport.LIVE,
                 v.transport == ReceiverState.Transport.GAME_CLOSED, v.synthetic);
@@ -1036,7 +1080,7 @@ public class MainActivity extends Activity {
         if (boardsCache != null) return boardsCache;
         if (!data.packReadable()) { boardsProblem = PACK_HELD; return null; }
         File f = new File(referenceDir, "boards.json");
-        if (!f.isFile()) { boardsProblem = "Game data not installed yet (run the data builder, see INSTALL)"; return null; }
+        if (!f.isFile()) { boardsProblem = NO_DATA; return null; }
         Map<String, Object> o = DataFiles.jsonObject(f, 512 * 1024);
         boardsCache = o != null ? LicenceBoards.parse(o) : null;
         if (boardsCache == null) boardsProblem = "boards.json unreadable";
@@ -1131,7 +1175,7 @@ public class MainActivity extends Activity {
         String st = why != null ? why                          // 0.22.0: say something only when it matters
                 : join(live ? null : "Last known",
                        gambitsView.editorOn() ? "Tap a gambit to change it" : null,
-                       reference == null ? "Names need the game data (see INSTALL)" : null);
+                       reference == null ? "Names need the game data: see Status → Game data" : null);
         gambitsView.show(ms, reference, st, live);
     }
 
@@ -1153,7 +1197,7 @@ public class MainActivity extends Activity {
         atlas = data == null ? null : Atlas.parse(new String(data, StandardCharsets.UTF_8), files);
         if (atlas == null) {
             atlasProblem = files == null && data != null && new String(data, StandardCharsets.UTF_8).contains(Atlas.FORMAT_2)
-                    ? "map data is incomplete (files.json missing): run the data builder again"
+                    ? "map data is incomplete: rebuild it (Status → Game data)"
                     : "map atlas index unreadable";
             return;
         }
@@ -1162,7 +1206,7 @@ public class MainActivity extends Activity {
         if (regions != null && regions.version != atlas.version) {
             atlas = null;
             regions = null;
-            atlasProblem = "map data is from two different builder runs: run the data builder again";
+            atlasProblem = "map data is from two different builds: rebuild it (Status → Game data)";
             return;
         }
         symbolArt = regions != null ? symbolArt(regions) : null;
