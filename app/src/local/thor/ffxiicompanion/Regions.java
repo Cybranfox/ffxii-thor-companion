@@ -381,22 +381,23 @@ final class Regions {
     }
 
     /**
-     * 0.16.0: what the map fits. A fresh area has nothing explored yet, so an area fit falls back to the region around
-     * it, stretched to take in the marker (sheet pixels of the focus part; null = no marker). Null only when nothing at
-     * all can be drawn.
+     * 0.16.0: what the map fits. The game saves an area's exploration when you leave it, so the area you're in can have
+     * nothing explored yet: an area fit then frames the area's whole sheet (where it will be drawn, with the marker in
+     * it and neighbours at the edges) instead of drawing nothing. Null only when nothing at all can be drawn.
      */
     static float[] fit(List<Part> parts, boolean focusOnly, Float markerPx, Float markerPy) {
         float[] b = bounds(parts, focusOnly);
         if (b != null) return b;
-        b = focusOnly ? bounds(parts, false) : null;
         Part focus = null;
         for (Part p : parts) if (p.focus) focus = p;
-        if (focus == null || markerPx == null || markerPy == null) return b;
-        float mx = focus.x + markerPx / 4f, my = focus.y + markerPy / 4f;   // RevealMapView.UNITS_PER_PX
-        if (b == null) {
-            float r = Reveal.TILE;                          // nothing explored anywhere: four tiles around the marker
-            return new float[] { mx - r, my - r, mx + r, my + r };
+        if (focusOnly && focus != null && focus.visible != null && focus.visible.length > 0) {
+            float tu = Reveal.TILE / 4f;
+            b = new float[] { focus.x, focus.y, focus.x + focus.visible[0].length * tu, focus.y + focus.visible.length * tu };
+            if (markerPx != null && markerPy != null) {           // a marker off the sheet still shows
+                float mx = focus.x + markerPx / 4f, my = focus.y + markerPy / 4f;   // RevealMapView.UNITS_PER_PX
+                b = new float[] { Math.min(b[0], mx), Math.min(b[1], my), Math.max(b[2], mx), Math.max(b[3], my) };
+            }
         }
-        return new float[] { Math.min(b[0], mx), Math.min(b[1], my), Math.max(b[2], mx), Math.max(b[3], my) };
+        return b;
     }
 }

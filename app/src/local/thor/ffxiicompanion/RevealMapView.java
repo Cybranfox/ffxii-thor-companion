@@ -146,6 +146,17 @@ final class RevealMapView extends View {
     }
 
     private void zoomBy(float f, float fx, float fy) {
+        // 0.16.0: pinching out past "this area" carries on into the whole region (it used to stop at the area's fit)
+        if (areaFit && zoom * f < MIN_ZOOM) {
+            float[] a = fitView(true), r = fitView(false);
+            if (a != null && r != null) {
+                float total = a[0] * zoom;                       // keep the picture where it is while switching
+                panX += (r[1] - a[1]) * total;
+                panY += (r[2] - a[2]) * total;
+                zoom = total / r[0];
+                areaFit = false;
+            }
+        }
         float z = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, zoom * f));
         f = z / zoom;
         // keep the point under the fingers still: the view is centred, so work relative to the centre
@@ -153,6 +164,7 @@ final class RevealMapView extends View {
         panX = (fx - cx) - ((fx - cx) - panX) * f;
         panY = (fy - cy) - ((fy - cy) - panY) * f;
         zoom = z;
+        if (!areaFit && zoom <= MIN_ZOOM) { panX = 0; panY = 0; }   // all the way out: back to the normal view
         changed();
     }
 
@@ -206,21 +218,11 @@ final class RevealMapView extends View {
         Regions.Part focus = null;
         for (Regions.Part p : parts) if (p.focus) focus = p;
         if (focus == null) return;
-        float[] b = Regions.fit(parts, !interactive || areaFit, markerPx, markerPy);
-        if (b == null) return;
-        if (interactive && !areaFit) {
-            // exits sit off the explored ground, at the end of their lines: fit them and their labels too
-            for (Regions.Exit e : exits) {
-                b[0] = Math.min(b[0], Math.min(e.x, e.lx)); b[1] = Math.min(b[1], Math.min(e.y, e.ly));
-                b[2] = Math.max(b[2], Math.max(e.x, e.lx)); b[3] = Math.max(b[3], Math.max(e.y, e.ly));
-            }
-        }
-        float m = interactive ? Math.max(b[2] - b[0], b[3] - b[1]) * (areaFit ? MARGIN / 2 : REGION_MARGIN)
-                : Math.max(b[2] - b[0], b[3] - b[1]) * MARGIN;
-        float vx0 = b[0] - m, vy0 = b[1] - m, vx1 = b[2] + m, vy1 = b[3] + m;
-        float scale = Math.min(getWidth() / (vx1 - vx0), getHeight() / (vy1 - vy0)) * zoom;
-        float ox = getWidth() / 2f + panX - (vx0 + vx1) / 2f * scale;
-        float oy = getHeight() / 2f + panY - (vy0 + vy1) / 2f * scale;
+        float[] v = fitView(!interactive || areaFit);
+        if (v == null) return;
+        float scale = v[0] * zoom;
+        float ox = getWidth() / 2f + panX - v[1] * scale;
+        float oy = getHeight() / 2f + panY - v[2] * scale;
 
         for (Regions.Part p : parts) if (!p.focus) drawPart(canvas, p, otherPaint, scale, ox, oy);
         linkPaint.setStrokeWidth(Math.max(1.5f, 2.5f * scale));
@@ -237,6 +239,23 @@ final class RevealMapView extends View {
             canvas.drawCircle(cx, cy, r, markerRing);
         }
         drawLabels(canvas, scale, ox, oy, d);
+    }
+
+    /** The unzoomed fit: {scale, centre x, centre y} in layout units, for the area or the whole region; null = nothing. */
+    private float[] fitView(boolean area) {
+        float[] b = Regions.fit(parts, area, markerPx, markerPy);
+        if (b == null) return null;
+        if (interactive && !area) {
+            // exits sit off the explored ground, at the end of their lines: fit them and their labels too
+            for (Regions.Exit e : exits) {
+                b[0] = Math.min(b[0], Math.min(e.x, e.lx)); b[1] = Math.min(b[1], Math.min(e.y, e.ly));
+                b[2] = Math.max(b[2], Math.max(e.x, e.lx)); b[3] = Math.max(b[3], Math.max(e.y, e.ly));
+            }
+        }
+        float m = interactive ? Math.max(b[2] - b[0], b[3] - b[1]) * (area ? MARGIN / 2 : REGION_MARGIN)
+                : Math.max(b[2] - b[0], b[3] - b[1]) * MARGIN;
+        float vx0 = b[0] - m, vy0 = b[1] - m, vx1 = b[2] + m, vy1 = b[3] + m;
+        return new float[] { Math.min(getWidth() / (vx1 - vx0), getHeight() / (vy1 - vy0)), (vx0 + vx1) / 2f, (vy0 + vy1) / 2f };
     }
 
     private void drawSymbols(Canvas canvas, float scale, float ox, float oy) {

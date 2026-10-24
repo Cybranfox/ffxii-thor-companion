@@ -145,18 +145,20 @@ public final class RevealTest {
             float[] all = Regions.bounds(rv.parts, false), cur = Regions.bounds(rv.parts, true);
             check(all[0] <= cur[0] && all[1] <= cur[1] && all[2] >= cur[2] && all[3] >= cur[3]
                     && (all[2] - all[0]) * (all[3] - all[1]) > (cur[2] - cur[0]) * (cur[3] - cur[1]), "region fit covers more than the area");
-            // 0.16.0: a fresh area (nothing explored) fits the region around it, marker included, instead of drawing nothing
+            // 0.16.0: a fresh area (nothing explored) frames its own sheet, marker included, instead of drawing nothing
             Regions.Part fresh = new Regions.Part();
             fresh.focus = true; fresh.x = 300; fresh.y = 40; fresh.visible = new boolean[4][4];
             java.util.List<Regions.Part> two = java.util.Arrays.asList(p, fresh);
             float[] f = Regions.fit(two, true, 40f, 80f);                  // marker at layout (310, 60)
-            check(f != null && f[0] == 132 && f[1] == 60 && f[2] == 310 && f[3] == 232, "fresh area: region plus marker");
-            check(Regions.fit(two, true, null, null)[2] == 148, "fresh area, no marker: the region");
+            check(f != null && f[0] == 300 && f[1] == 40 && f[2] == 364 && f[3] == 104, "fresh area: its sheet, marker inside");
+            float[] off = Regions.fit(two, true, 400f, 80f);              // marker at layout (400, 60), off the sheet
+            check(off[0] == 300 && off[2] == 400 && Regions.fit(two, true, null, null)[2] == 364,
+                    "a marker off the sheet stretches the frame; no marker: the sheet");
             fresh.visible[0][0] = true;
             check(Regions.fit(two, true, 40f, 80f)[2] == 316, "explored area: its own tiles only, as before");
             fresh.visible[0][0] = false;
             float[] lone = Regions.fit(java.util.Collections.singletonList(fresh), true, 40f, 80f);
-            check(lone[0] == 246 && lone[1] == -4 && lone[2] == 374 && lone[3] == 124 &&Regions.fit(java.util.Collections.singletonList(new Regions.Part()), true, null, null) == null,
+            check(lone[0] == 300 && lone[1] == 40 && lone[2] == 364 && lone[3] == 104 &&Regions.fit(java.util.Collections.singletonList(new Regions.Part()), true, null, null) == null,
                     "nothing to fit: null, so nothing is drawn");
             ok("exit labels only beside areas the player has visited; old packs have none; full-map fit covers every shown area");
         }
