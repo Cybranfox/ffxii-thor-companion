@@ -35,7 +35,7 @@ There are three pieces, and each only does its own job:
 - **AYN Thor** (Android 13) with **GameNative** and **FINAL FANTASY XII THE ZODIAC AGE from Steam, version 1.0.4.0**.
   Other game builds are detected and the companion stays read-only and blank.
 - **Required mods:** ffgriever's [FF12 External File Loader](https://www.nexusmods.com/finalfantasy12/mods/170) and
-  [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171). Tested with LUA Loader 1.7.1 and 2.0.1.
+  [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171). Use the current versions (tested: LUA Script Loader 2.0.1 with External File Loader 1.6.1). 1.7.1 still works but often hangs when the game closes.
 - **Optional mods** that add text: [Dynamic Equipment Description](https://www.nexusmods.com/finalfantasy12/mods/441)
   with *The Insurgent's Descriptive Inventory* (Equip tab descriptions), and *Foedex Clan Primer Text Replacer* (Bestiary
   tab). Everything else works without them.

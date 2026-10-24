@@ -1,7 +1,7 @@
 # Install, update and remove
 
 Tested setup: AYN Thor (Android 13), GameNative, FINAL FANTASY XII THE ZODIAC AGE (Steam) 1.0.4.0,
-FF12 External File Loader 1.4.x / 1.6.1 + FF12 LUA Script Loader 1.7.1 / 2.0.1.
+FF12 External File Loader 1.6.1 + FF12 LUA Script Loader 2.0.1 (1.4.x + 1.7.1 also work, but 1.7.1 often hangs on exit).
 
 In GameNative's container (Wine), drive **A:** is the game folder and drive **D:** is the Thor's **Download** folder.
 Everything the companion uses lives in `Download/FFXII_companion` (`D:\FFXII_companion`).
@@ -11,7 +11,7 @@ Everything the companion uses lives in `Download/FFXII_companion` (`D:\FFXII_com
 Skip this if the loaders already work for you (other Lua mods load).
 
 1. Download ffgriever's [FF12 External File Loader](https://www.nexusmods.com/finalfantasy12/mods/170) and
-   [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171) (1.7.1 and 2.0.1 are tested).
+   [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171) (use the current version; 2.0.1 with External File Loader 1.6.1 is tested).
 2. Copy their files into the game folder's `x64` folder, as their pages describe: put them in the Thor's `Download`
    folder, then in GameNative open the game › Options › **Open container** and copy them into `A:\x64` with the file
    manager. After this, `A:\x64` has `dinput8.dll`, `ff12-trampoline.dll`, `hook.ini`, and a `modules` folder with
