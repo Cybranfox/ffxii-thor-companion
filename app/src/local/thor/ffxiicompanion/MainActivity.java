@@ -138,7 +138,10 @@ public class MainActivity extends Activity {
     DataOwner data;
     int seenInstalls, seenFailures;
     TextView dataLine, dataButton;
-    LinearLayout setupCard, setupRows;
+    LinearLayout setupCard, setupRows, liveBody, tabBar;
+    long allSetUntil;                           // elapsedRealtime: show "All set" until then, after setup first completes
+    boolean bareShown;                          // no file access yet: only the Setup card is shown
+    final java.util.Map<View, Integer> bareSaved = new java.util.HashMap<>();
     TextView setupButton;
     SetupFlow.Action setupShown = SetupFlow.Action.NONE;
     boolean setupOpen;
@@ -273,11 +276,13 @@ public class MainActivity extends Activity {
             tabs[i] = t;
         }
         root.addView(tabRow);
+        tabBar = tabRow;
 
         ScrollView scroll = new ScrollView(this);
         liveScroll = scroll;
         LinearLayout body = new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
+        liveBody = body;
         scroll.addView(body);
         root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         gambitsView = new GambitsView(this, TEXT, DIM, ACCENT, CARD, BG, GOOD, WARN);
@@ -623,7 +628,7 @@ public class MainActivity extends Activity {
         if (label != null) dataButton.setText(label);
     }
 
-    /** 0.16.0: the Setup card, from SetupFlow over what the app observes now (SetupInputs). */
+    /** 0.16.0: the Setup card, from SetupFlow over what the app observes now (SetupInputs). v is null before file access. */
     void showSetup(ReceiverState.View v) {
         SetupInputs.Obs o = new SetupInputs.Obs();
         o.supported = android.os.Build.VERSION.SDK_INT >= 30;
@@ -658,13 +663,14 @@ public class MainActivity extends Activity {
         o.assetsComplete = assetsComplete;
         o.installSynced = installSynced;
         o.bundledSig = bundledSig;
-        o.loaderStatus = DataFiles.jsonObject(new File(dir, "loader_status.json"), LoaderStatus.MAX_BYTES);
-        o.transport = v.transport.name();
-        o.accepted = v.current != null && !v.current.synthetic;
-        o.synthetic = v.current != null && v.current.synthetic;
-        Map<String, Object> hello = v.current != null ? Json.obj(v.current.data, "hello") : null;
-        o.buildSupported = v.transport == ReceiverState.Transport.LIVE && hello != null ? Reveal.buildVerified(hello) : null;
-        o.snapshotData = v.current != null ? v.current.data : null;
+        o.loaderStatus = o.storageGranted ? DataFiles.jsonObject(new File(dir, "loader_status.json"), LoaderStatus.MAX_BYTES) : null;
+        Snapshot cur = v != null ? v.current : null;
+        o.transport = v != null ? v.transport.name() : "NO_DATA";
+        o.accepted = cur != null && !cur.synthetic;
+        o.synthetic = cur != null && cur.synthetic;
+        Map<String, Object> hello = cur != null ? Json.obj(cur.data, "hello") : null;
+        o.buildSupported = v != null && v.transport == ReceiverState.Transport.LIVE && hello != null ? Reveal.buildVerified(hello) : null;
+        o.snapshotData = cur != null ? cur.data : null;
         DataOwner.PackVerdict pv = data.packVerdict();
         o.packChecked = pv != null;
         o.packPresent = pv != null && pv.present;
@@ -672,25 +678,35 @@ public class MainActivity extends Activity {
         o.atlasFormat = pv != null ? pv.atlasFormat : null;
         o.packReadable = data.packReadable();
         o.building = data.building();
-        CopyJob job = CopyJob.load(DATA_DIR);
+        CopyJob job = o.storageGranted ? CopyJob.load(DATA_DIR) : null;
         boolean copying = job != null && (job.phase() == CopyJob.Phase.HEADER || job.phase() == CopyJob.Phase.DATA
                 || job.phase() == CopyJob.Phase.CONFIG);
         o.jobId = copying ? job.jobId() : null;
-        o.rawcopy = v.current != null ? Json.obj(v.current.data, "rawcopy") : null;
+        o.rawcopy = cur != null ? Json.obj(cur.data, "rawcopy") : null;
         android.content.SharedPreferences prefs = getSharedPreferences("setup", MODE_PRIVATE);
         o.completedRevision = prefs.getInt("completedRevision", 0);
 
         SetupFlow.View view = SetupFlow.evaluate(SetupInputs.build(o));
-        if (view.shouldPersistCompletion) prefs.edit().putInt("completedRevision", SetupInputs.REVISION).apply();
-        setupCard.setVisibility(view.needsOnboarding || setupOpen ? View.VISIBLE : View.GONE);
+        if (view.shouldPersistCompletion) {
+            prefs.edit().putInt("completedRevision", SetupInputs.REVISION).apply();
+            allSetUntil = now + 120_000;                               // a moment of "done" before the card hides
+        }
+        boolean allSet = view.complete && now < allSetUntil;
+        setupCard.setVisibility(view.needsOnboarding || setupOpen || allSet || v == null ? View.VISIBLE : View.GONE);
         if (setupCard.getVisibility() != View.VISIBLE) return;
         setupRows.removeAllViews();
         for (SetupFlow.Step st : view.steps) {
-            String mark = st.state == SetupFlow.State.OK ? "\u2713 " : st.state == SetupFlow.State.MISSING ? "! " : "? ";
-            int color = st.state == SetupFlow.State.OK ? GOOD : st.state == SetupFlow.State.MISSING ? BAD : DIM;
+            boolean busy = st.state == SetupFlow.State.MISSING && SetupText.inProgress(st.messageKey);   // work, not a fault
+            String mark = st.state == SetupFlow.State.OK ? "\u2713 " : busy ? "\u2026 " : st.state == SetupFlow.State.MISSING ? "! " : "? ";
+            int color = st.state == SetupFlow.State.OK ? GOOD : busy ? ACCENT : st.state == SetupFlow.State.MISSING ? BAD : DIM;
             TextView row = text(mark + SetupText.title(st.id) + ": " + SetupText.line(st.messageKey), 14, color, false);
             row.setPadding(0, dp(2), 0, dp(2));
             setupRows.addView(row);
+        }
+        if (allSet) {
+            TextView done = text(SetupText.ALL_SET, 15, GOOD, true);
+            done.setPadding(0, dp(6), 0, dp(2));
+            setupRows.addView(done);
         }
         setupShown = view.firstBlocker != null ? view.firstBlocker.action : SetupFlow.Action.NONE;
         String label = SetupText.label(setupShown);
@@ -710,8 +726,12 @@ public class MainActivity extends Activity {
                 case GRANT_STORAGE: grant.performClick(); break;
                 case SYNC_INSTALL: installSynced = false; break;              // the next refresh syncs again
                 case OPEN_GAME_NATIVE: {
-                    Intent i = getPackageManager().getLaunchIntentForPackage("app.gamenative");
-                    startActivity(i != null ? i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) : web(INSTALL_URL), top);
+                    try {                                                    // straight into FFXII, as Cocoon does
+                        startActivity(startGame(), top);
+                    } catch (RuntimeException e) {                           // older GameNative: its library instead
+                        Intent i = getPackageManager().getLaunchIntentForPackage("app.gamenative");
+                        startActivity(i != null ? i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) : web(INSTALL_URL), top);
+                    }
                     break;
                 }
                 case SHOW_SETUP_STEPS:
@@ -724,6 +744,21 @@ public class MainActivity extends Activity {
         } catch (RuntimeException e) {                                    // no browser, a vanished package, ...
             Toast.makeText(this, "Couldn't open that here: see " + INSTALL_URL, Toast.LENGTH_LONG).show();
         }
+    }
+
+    /** FFXII's Steam app id, for GameNative's launch action. */
+    static final int FFXII_STEAM_APP_ID = 595520;
+
+    /**
+     * GameNative's own game-launch action (IntentLaunchManager: app_id + game_source; the same one Cocoon sends). No
+     * container_config: the game starts with its normal settings.
+     */
+    static Intent startGame() {
+        return new Intent("app.gamenative.LAUNCH_GAME")
+                .setClassName("app.gamenative", "app.gamenative.MainActivity")
+                .putExtra("app_id", FFXII_STEAM_APP_ID)
+                .putExtra("game_source", "STEAM")
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
     }
 
     static Intent web(String url) {
@@ -882,11 +917,13 @@ public class MainActivity extends Activity {
 
     void refresh() {
         if (!fixtureMode && !Environment.isExternalStorageManager()) {
-            grant.setVisibility(View.VISIBLE);
-            setStatus("NO ACCESS", BAD, "This app needs all-files access to read " + dir + ".");
+            // First run: only the Setup card (its button opens the permission page); the other cards have nothing yet.
+            setStatus("Setup", DIM, "Welcome. Allow file access to start: the companion reads the files FFXII writes in Download.");
+            showBare(true);
+            showSetup(null);
             return;
         }
-        grant.setVisibility(View.GONE);
+        showBare(false);
         if (!installSynced) {
             installSynced = Installer.sync(getAssets(), INSTALL_DIR) >= 0;
             if (!installSynced) android.util.Log.w("FFXIICompanion", "install folder: " + Installer.lastError);
@@ -911,6 +948,25 @@ public class MainActivity extends Activity {
         data.tick(v.current != null ? Json.obj(v.current.data, "rawcopy") : null);
         closeAfterExit(v.transport == ReceiverState.Transport.LIVE,
                 v.transport == ReceiverState.Transport.GAME_CLOSED, v.synthetic);
+    }
+
+    /** Before file access: hide the tabs and every card but Setup; put them back once access is granted. */
+    void showBare(boolean bare) {
+        if (bare == bareShown) return;
+        bareShown = bare;
+        tabBar.setVisibility(bare ? View.GONE : View.VISIBLE);
+        if (bare) selectTab(0);
+        for (int i = 0; i < liveBody.getChildCount(); i++) {
+            View c = liveBody.getChildAt(i);
+            if (c == setupCard) continue;
+            if (bare) {
+                bareSaved.put(c, c.getVisibility());
+                c.setVisibility(View.GONE);
+            } else if (bareSaved.containsKey(c)) {
+                c.setVisibility(bareSaved.get(c));
+            }
+        }
+        if (!bare) bareSaved.clear();
     }
 
     void closeAfterExit(boolean running, boolean exited, boolean synthetic) {

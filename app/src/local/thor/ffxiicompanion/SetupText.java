@@ -35,6 +35,7 @@ final class SetupText {
         LINES.put("loaders_reported_ready", "The game reports a supported LUA Script Loader and External File Loader.");
         LINES.put("loaders_not_observed", "Start FFXII in GameNative so the companion can check the game setup.");
         LINES.put("loaders_wait_install", "Needs the setup files first.");
+        LINES.put("loader_not_seen", "First time? Run install.cmd once in the game's GameNative container (Options › Open container › D: › FFXII_companion › install), then start FFXII.");
         LINES.put("loader_versions_not_confirmed", "The game didn't report its loader versions yet.");
         LINES.put("loader_file_reported_missing", "The game reports a loader file missing. Run the setup steps again.");
         LINES.put("loader_version_reported_unsupported", "The game's LUA Script Loader version isn't supported. See the setup steps.");
@@ -59,6 +60,7 @@ final class SetupText {
         LINES.put("script_reported_start_failure", "The game script didn't start. See the setup steps.");
         LINES.put("script_reported_result_unknown", "The game reported something this app doesn't know. See the setup steps.");
         LINES.put("script_wait_install", "Needs the setup files first.");
+        LINES.put("script_wait_loader", "Needs the loader first (install.cmd).");
 
         LINES.put("data_ready", "Game data ready.");
         LINES.put("data_ready_legacy", "Game data ready (older format; a rebuild adds the newest map checks).");
@@ -75,7 +77,17 @@ final class SetupText {
         LINES.put("build_copied_not_committed", "Copied. Building your game data…");
         LINES.put("build_processing", "Building and checking your game data…");
         LINES.put("build_copy_failed", "The copy stopped. Try again.");
+        LINES.put("build_waiting_for_game", "Build requested: start FFXII to copy the game files (about 5 minutes; you can keep playing).");
+        LINES.put("build_starting", "Starting the copy…");
     }
+
+    /** Lines for work under way: shown as progress, not as a problem. */
+    static boolean inProgress(String key) {
+        return key.startsWith("build_") && !key.equals("build_copy_failed");
+    }
+
+    /** Shown once, for a while, when setup first completes. */
+    static final String ALL_SET = "All set: the companion is ready. Play as normal; this card hides itself.";
 
     static String title(String id) { return TITLES.getOrDefault(id, id); }
 
@@ -86,7 +98,7 @@ final class SetupText {
         switch (a) {
             case GRANT_STORAGE: return "Allow file access";
             case SYNC_INSTALL: return "Try again";
-            case OPEN_GAME_NATIVE: return "Open GameNative";
+            case OPEN_GAME_NATIVE: return "Start FFXII";           // GameNative's launch action, library as fallback
             case SHOW_SETUP_STEPS:
             case REINSTALL_BOOTSTRAP: return "Show setup steps";
             case UPDATE_APP: return "Open releases";

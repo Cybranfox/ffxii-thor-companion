@@ -61,8 +61,8 @@ arrive with the app and the loader checks and runs them by itself.
 
 If you launch games from **Cocoon**, it can open the companion on the bottom screen every time you start FFXII:
 find FINAL FANTASY XII (the PC entry) › press **Y** › **Edit** › **Companion App** › **FFXII Companion** › save with the
-check mark. Uninstalling the app clears this link, so set it again after a reinstall. Updating over the old version
-keeps it. If you start the game from GameNative directly, open FFXII Companion on the bottom screen yourself.
+check mark. Updating over the old version keeps it, and on the Thor it also survived uninstalling and reinstalling the
+app. If it's ever gone, set it again the same way. If you start the game from GameNative directly, open FFXII Companion on the bottom screen yourself.
 
 ## Gambit editor (optional)
 

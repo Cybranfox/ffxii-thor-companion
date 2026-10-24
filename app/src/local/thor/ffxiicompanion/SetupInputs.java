@@ -59,7 +59,9 @@ final class SetupInputs {
                 "loaderInventoryCurrent", hello != null && loader != null && Json.arr(hello, "mods") != null,
                 "eflCompatible", eflCompatible(loader),
                 "rawcopyCurrent", "LIVE".equals(o.transport) && o.jobId != null && o.rawcopy != null && o.jobId.equals(o.rawcopy.get("job")),
-                "appBuildCurrent", o.building));
+                "appBuildCurrent", o.building,
+                "loaderReceiptSeen", o.loaderStatus != null,       // none ever: the loader has never run (install.cmd)
+                "buildRequested", o.jobId != null));               // a copy job waits for, or runs in, the game
         boolean valid = o.packPresent && o.packProblem == null;
         root.put("pack", !o.packChecked                 // not checked yet: no pack evidence at all (the step says so)
                 ? map("committed", o.packReadable, "buildStatus", o.building ? "building" : null)

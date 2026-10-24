@@ -97,10 +97,21 @@ public class SetupInputsTest {
         o.packPresent = false;
         o.packProblem = "no game data";
         v = run(o);
-        check(step(v, "loaders").state == SetupFlow.State.UNKNOWN && step(v, "loaders").action == SetupFlow.Action.OPEN_GAME_NATIVE,
-                "never started: loaders unknown (not missing), Open GameNative");
-        check(v.firstBlocker.id.equals("data") && step(v, "data").messageKey.equals("data_pack_missing"),
-                "  no game data is the first real problem: \"" + SetupText.line("data_pack_missing") + "\"");
+        check(step(v, "loaders").state == SetupFlow.State.UNKNOWN && step(v, "loaders").messageKey.equals("loader_not_seen")
+                && "Show setup steps".equals(SetupText.label(step(v, "loaders").action)),
+                "new user, no loader receipt ever: loaders unknown (not missing), \"" + SetupText.line("loader_not_seen") + "\"");
+        check(v.firstBlocker.id.equals("loaders") && step(v, "data").messageKey.equals("data_pack_missing"),
+                "  game data that can't be built yet waits: the loader step has the button");
+
+        o.loaderStatus = m("contract", "ffxii.loader.v1", "stub", 2L, "result", "ok", "version", "0.15.0-beta", "sequence", 6L,
+                "wallTime", SESSION_WALL - 5);
+        v = run(o);
+        check(v.firstBlocker.id.equals("data") && v.firstBlocker.action == SetupFlow.Action.START_BUILD,
+                "game closed after a good start of this release: Build game data offered on the setup card");
+        o.jobId = "dat-g1";
+        v = run(o);
+        check(step(v, "data").messageKey.equals("build_waiting_for_game") && SetupText.inProgress("build_waiting_for_game"),
+                "build requested, game closed: \"" + SetupText.line("build_waiting_for_game") + "\" (shown as progress)");
 
         o = healthy();
         o.buildSupported = false;
@@ -138,7 +149,8 @@ public class SetupInputsTest {
         o.rawcopy.put("paused", "fight");
         check(step(run(o), "data").messageKey.equals("build_paused_fight"), "fight: \"" + SetupText.line("build_paused_fight") + "\"");
         o.rawcopy.put("job", "dat-other");
-        check(!step(run(o), "data").messageKey.startsWith("build_"), "a copy status for another job is ignored");
+        check(step(run(o), "data").messageKey.equals("build_starting"),
+                "a copy status for another job is ignored: ours is still starting");
 
         o = healthy();
         o.completedRevision = SetupInputs.REVISION;
