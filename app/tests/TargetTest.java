@@ -66,6 +66,13 @@ public final class TargetTest {
         check(Party.tone(new Party.Vital(60, 100)) == 0 && Party.tone(new Party.Vital(49, 100)) == 1
                 && Party.tone(new Party.Vital(24, 100)) == 2 && Party.tone(new Party.Vital(0, 100)) == 3
                 && Party.tone(null) == 0 && Party.tone(new Party.Vital(5, 0)) == 0, "bar tones: fine, below half, below a quarter, zero");
-        System.out.println("PASS TargetTest 16 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
+        // 0.16.0: Suggest puts the live target's weaknesses first (element bits in Target.ELEMENTS order).
+        List<Object[]> order = GambitPlan.byLiveWeakness(1 << 5);                 // Wind
+        check((Integer) order.get(0)[0] == 0x604E && order.size() == GambitPlan.ELEMENTS.length,
+                "Wind-weak target: the Wind gambit comes first, nothing dropped");
+        check((Integer) GambitPlan.byLiveWeakness(0).get(0)[0] == 0x6049, "no live target: the usual order");
+        check(GambitPlan.liveWeakness(0x6049, 1) && !GambitPlan.liveWeakness(0x604E, 1) && !GambitPlan.liveWeakness(0x6059, 0xFF),
+                "live-weakness test per condition; Undead isn't an element");
+        System.out.println("PASS TargetTest 19 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
     }
 }

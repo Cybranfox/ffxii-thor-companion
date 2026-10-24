@@ -71,6 +71,16 @@ final class GambitPlan {
      * boards (optional) only names the jobs.
      */
     static List<Plan> suggest(Build build, LicenceNodes nodes, Reference ref, List<Gambits.Member> current, LicenceBoards boards) {
+        return suggest(build, nodes, ref, current, boards, 0);
+    }
+
+    /**
+     * 0.16.0: liveWeak = element bits (Target.ELEMENTS order) the enemies the party is fighting right now are weak to
+     * (live affinities, gear and effects included). Those weakness gambits go first, with the reason saying so, and are
+     * the last to be dropped when twelve slots aren't enough. 0 = no live target (the generic order).
+     */
+    static List<Plan> suggest(Build build, LicenceNodes nodes, Reference ref, List<Gambits.Member> current, LicenceBoards boards,
+                              int liveWeak) {
         if (build == null || nodes == null || ref == null || !build.ownershipKnown()) return null;
         Set<Integer> conds = new HashSet<>(build.gambits);
         List<Set<Integer>> can = new ArrayList<>();
@@ -138,10 +148,12 @@ final class GambitPlan {
             add(s, conds, ALLY_ANY, c.contains(protect) ? protect : -1, "Keep Protect up");
             add(s, conds, ALLY_ANY, c.contains(shell) ? shell : -1, "Keep Shell up");
             if (spells(c, ref) >= 2) {   // casters: exploit weaknesses (guides: specific conditions above general ones)
-                for (Object[] e : ELEMENTS) {
+                for (Object[] e : byLiveWeakness(liveWeak)) {
                     int sp = -1;
                     for (String n : (String[]) e[1]) { int a = action(ref, n); if (a >= 0 && c.contains(a)) { sp = a; break; } }
-                    add(s, conds, (Integer) e[0], sp, "Hit the weakness with " + Gambits.action(sp, ref));
+                    boolean now = (liveWeak & (1 << ((Integer) e[0] - 0x6049))) != 0;
+                    add(s, conds, (Integer) e[0], sp, "Hit the weakness with " + Gambits.action(sp, ref)
+                            + (now ? " (what you're fighting now is weak to it)" : ""));
                 }
                 int heal = first(c, healing);
                 add(s, conds, FOE_UNDEAD, heal, "Curative magick damages the undead");
@@ -152,6 +164,8 @@ final class GambitPlan {
             add(s, conds, FOE_NEAREST_VISIBLE, ATTACK, "Fallback attack");
             while (s.size() > 12) {   // over the 12 slots: drop the least important first (last weakness spell, then buffs)
                 int drop = -1;
+                for (int i = s.size() - 1; i >= 0 && drop < 0; i--)
+                    if (isWeakness(s.get(i).condition) && !liveWeakness(s.get(i).condition, liveWeak)) drop = i;
                 for (int i = s.size() - 1; i >= 0 && drop < 0; i--) if (isWeakness(s.get(i).condition)) drop = i;
                 for (int i = s.size() - 1; i >= 0 && drop < 0; i--) if (s.get(i).condition == ALLY_ANY) drop = i;
                 s.remove(drop >= 0 ? drop : s.size() - 3);
@@ -159,6 +173,19 @@ final class GambitPlan {
             out.add(new Plan(m, role, jobs(bm, boards), Collections.unmodifiableList(s)));
         }
         return out;
+    }
+
+    /** ELEMENTS with the live target's weaknesses first, otherwise in the usual order. */
+    static List<Object[]> byLiveWeakness(int liveWeak) {
+        List<Object[]> first = new ArrayList<>(), rest = new ArrayList<>();
+        for (Object[] e : ELEMENTS) (liveWeakness((Integer) e[0], liveWeak) ? first : rest).add(e);
+        first.addAll(rest);
+        return first;
+    }
+
+    static boolean liveWeakness(int condition, int liveWeak) {
+        int bit = condition - 0x6049;
+        return bit >= 0 && bit < 8 && (liveWeak & (1 << bit)) != 0;
     }
 
     static boolean isWeakness(int c) { return (c >= 0x6049 && c <= 0x6050) || c == FOE_UNDEAD; }

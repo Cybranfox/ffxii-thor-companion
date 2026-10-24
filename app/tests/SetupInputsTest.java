@@ -71,6 +71,12 @@ public class SetupInputsTest {
         check(SetupInputs.assetsComplete(names, sig) && !SetupInputs.assetsComplete(names.subList(0, 3), sig)
                 && !SetupInputs.assetsComplete(names, null), "setup files complete only with every install file and a readable signature");
 
+        String ok = "FFXII Thor Companion install \r\nINSTALLED: A:\\x64\\scripts\\ThorCompanion.lua (loader).\r\n";
+        check("installed".equals(SetupInputs.bootstrap(ok))
+                && "installed_warning".equals(SetupInputs.bootstrap("WARNING: no msvcp140.dll in x64.\nINSTALLED: x\n"))
+                && "failed".equals(SetupInputs.bootstrap("FAILED: game not found at A:\\x64\n"))
+                && SetupInputs.bootstrap("REMOVED: the game runs exactly as before.") == null && SetupInputs.bootstrap(null) == null,
+                "install.cmd result.txt: installed / warning / failed / an uninstall or nothing");
         SetupFlow.View v = run(healthy());
         check(v.complete && v.firstBlocker == null && v.shouldPersistCompletion, "healthy Thor: all five checks OK, setup complete, remembered");
         for (String id : new String[] {"storage", "install", "loaders", "script", "data"})

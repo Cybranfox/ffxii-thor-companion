@@ -10,4 +10,6 @@ if exist "A:\x64\scripts\ThorCompanion.lua" del /f /q "A:\x64\scripts\ThorCompan
 if exist "A:\x64\scripts\ThorCompanion-state" rmdir /s /q "A:\x64\scripts\ThorCompanion-state"
 if exist "A:\x64\scripts\ThorCompanion.lua" (echo FAILED: could not delete A:\x64\scripts\ThorCompanion.lua >> "%RES%") else (echo REMOVED: the game runs exactly as before. Uninstall the app to finish. >> "%RES%")
 type "%RES%"
+rem 0.16.0: show the result where the player can see it.
+start "" notepad.exe "%RES%"
 endlocal

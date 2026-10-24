@@ -35,6 +35,7 @@ final class SetupInputs {
         String jobId;                          // the copy job's current job id while copying (null otherwise)
         Map<String, Object> rawcopy;
         int completedRevision;
+        String bootstrap;                      // install/result.txt verdict: installed / installed_warning / failed / null
     }
 
     private SetupInputs() {}
@@ -61,6 +62,7 @@ final class SetupInputs {
                 "rawcopyCurrent", "LIVE".equals(o.transport) && o.jobId != null && o.rawcopy != null && o.jobId.equals(o.rawcopy.get("job")),
                 "appBuildCurrent", o.building,
                 "loaderReceiptSeen", o.loaderStatus != null,       // none ever: the loader has never run (install.cmd)
+                "bootstrapResult", o.bootstrap,                     // what install.cmd last reported (result.txt)
                 "buildRequested", o.jobId != null));               // a copy job waits for, or runs in, the game
         boolean valid = o.packPresent && o.packProblem == null;
         root.put("pack", !o.packChecked                 // not checked yet: no pack evidence at all (the step says so)
@@ -95,6 +97,25 @@ final class SetupInputs {
     static boolean assetsComplete(java.util.Collection<String> have, Map<String, Object> sig) {
         return sig != null && have.containsAll(Arrays.asList("ThorCompanion.lua", "ThorCompanion-core.lua",
                 "ThorCompanion-core.sig", "install.cmd", "uninstall.cmd", "README.txt"));
+    }
+
+    /**
+     * 0.16.0: install.cmd's verdict from install/result.txt (it rewrites the file on every run): "installed",
+     * "installed_warning" (installed, but it saw the mod loaders or the C++ runtime missing), "failed", or null (no
+     * file, an uninstall's result, or something else). Only the fixed markers count; the text itself is never shown.
+     */
+    static String bootstrap(String text) {
+        if (text == null) return null;
+        boolean installed = false, warning = false, failed = false;
+        for (String line : text.split("\r?\n")) {
+            String l = line.trim();
+            if (l.startsWith("FAILED:")) failed = true;
+            else if (l.startsWith("WARNING:")) warning = true;
+            else if (l.startsWith("INSTALLED:")) installed = true;
+        }
+        if (failed) return "failed";
+        if (installed) return warning ? "installed_warning" : "installed";
+        return null;
     }
 
     /** True / false from the loader's plugin list (ff12.efl version); null when the loader doesn't report it. */

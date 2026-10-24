@@ -95,7 +95,14 @@ public final class SetupFlow {
             return s("loaders",State.UNKNOWN,"loader_versions_not_confirmed",Action.SHOW_SETUP_STEPS,false);
         }
         // No loader receipt ever: the loader has never run, so install.cmd is the likely next step (still not "missing").
-        if(no(at(r,"evidence.loaderReceiptSeen")))return s("loaders",State.UNKNOWN,"loader_not_seen",Action.SHOW_SETUP_STEPS,false);
+        if(no(at(r,"evidence.loaderReceiptSeen"))){
+            // 0.16.0: install.cmd's own result.txt says how the one-time install went; the game hasn't run it yet.
+            String boot=str(at(r,"evidence.bootstrapResult"));
+            if("failed".equals(boot))return s("loaders",State.MISSING,"loader_install_failed",Action.SHOW_SETUP_STEPS,true);
+            if("installed_warning".equals(boot))return s("loaders",State.UNKNOWN,"loader_installed_warning",Action.OPEN_GAME_NATIVE,false);
+            if("installed".equals(boot))return s("loaders",State.UNKNOWN,"loader_installed_start_game",Action.OPEN_GAME_NATIVE,false);
+            return s("loaders",State.UNKNOWN,"loader_not_seen",Action.SHOW_SETUP_STEPS,false);
+        }
         return s("loaders",State.UNKNOWN,"loaders_not_observed",Action.OPEN_GAME_NATIVE,false);
     }
     static Step script(Map<String,Object> r,String refusal){
@@ -110,7 +117,8 @@ public final class SetupFlow {
                 default:return s("script",State.UNKNOWN,"script_reported_result_unknown",Action.SHOW_SETUP_STEPS,false);
             }
         }
-        if(no(at(r,"evidence.loaderReceiptSeen"))&&!liveAccepted(r))return s("script",State.UNKNOWN,"script_wait_loader",Action.SHOW_SETUP_STEPS,false);
+        if(no(at(r,"evidence.loaderReceiptSeen"))&&!liveAccepted(r)&&!String.valueOf(at(r,"evidence.bootstrapResult")).startsWith("installed"))
+            return s("script",State.UNKNOWN,"script_wait_loader",Action.SHOW_SETUP_STEPS,false);
         if("GAME_CLOSED".equals(at(r,"receiver.transport"))||yes(at(r,"snapshot.data.session.exiting")))return s("script",State.UNKNOWN,"script_game_closed",Action.OPEN_GAME_NATIVE,false);
         if("STALE".equals(at(r,"receiver.transport"))||"NO_SIGNAL".equals(at(r,"receiver.transport")))return s("script",State.UNKNOWN,"script_no_fresh_signal",Action.OPEN_GAME_NATIVE,false);
         if(yes(at(r,"snapshot.synthetic"))||("LIVE".equals(at(r,"receiver.transport"))&&no(at(r,"receiver.accepted"))))return s("script",State.UNKNOWN,"script_unaccepted_source",Action.OPEN_GAME_NATIVE,false);

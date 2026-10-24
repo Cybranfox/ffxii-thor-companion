@@ -28,4 +28,6 @@ if not exist "%X%\scripts\ThorCompanion.lua" (echo FAILED: copy did not land >> 
 echo INSTALLED: %X%\scripts\ThorCompanion.lua (loader). Future companion updates install themselves. >> "%RES%"
 :end
 type "%RES%"
+rem 0.16.0: show the result where the player can see it (the container file list does not refresh).
+start "" notepad.exe "%RES%"
 endlocal

@@ -139,7 +139,9 @@ public class MainActivity extends Activity {
     int seenInstalls, seenFailures;
     TextView dataLine, dataButton;
     LinearLayout dataCard;                       // 0.16.0: only while there's something to say; else one line in Details
-    TextView dataQuiet;
+    TextView dataQuiet, dataQuietButton;
+    LinearLayout dataQuietRow;
+    long referenceFailedStamp = -1;              // reference.json's mtime when it last failed to parse (no re-read)
     LinearLayout setupCard, setupRows, liveBody, tabBar;
     long allSetUntil;                           // elapsedRealtime: show "All set" until then, after setup first completes
     boolean bareShown;                          // no file access yet: only the Setup card is shown
@@ -241,7 +243,6 @@ public class MainActivity extends Activity {
         statusDetail = text("", 12, DIM, false);
         statusDetail.setMaxLines(1);                     // 0.16.0: one line; the Setup card carries guidance
         statusDetail.setEllipsize(TextUtils.TruncateAt.END);
-        statusDetail.setEllipsize(TextUtils.TruncateAt.END);
         statusDetail.setPadding(0, dp(3), 0, dp(4));
         root.addView(statusDetail);
 
@@ -330,7 +331,7 @@ public class MainActivity extends Activity {
         LinearLayout rightCol = new LinearLayout(this);
         rightCol.setOrientation(LinearLayout.VERTICAL);
         statusRow.addView(leftCol, new LinearLayout.LayoutParams(0, -2, 45));
-        statusRow.addView(rightCol, new LinearLayout.LayoutParams(0, -1, 55));
+        statusRow.addView(rightCol, new LinearLayout.LayoutParams(0, -2, 55));
         body.addView(statusRow, new LinearLayout.LayoutParams(-1, -2));
 
         // Location: area name large on one line, then where from / ids.
@@ -377,16 +378,15 @@ public class MainActivity extends Activity {
         mapView = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK, TEXT, BG, 10, false);
         mapView.setVisibility(View.GONE);
         mapView.setOnClickListener(x -> openMap(true));
-        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-1, 0, 1);   // fills the column's height
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-1, dp(330));   // fixed: no jump when a fight starts
         mlp.topMargin = dp(4);
-        mapView.setMinimumHeight(dp(240));
         mapCard.addView(mapView, mlp);
         mapNote = text("", 12, DIM, false);
         mapNote.setMaxLines(2);
         mapNote.setEllipsize(TextUtils.TruncateAt.END);
         mapNote.setPadding(0, dp(3), 0, 0);
         mapCard.addView(mapNote);
-        LinearLayout.LayoutParams mcp = new LinearLayout.LayoutParams(-1, 0, 1);
+        LinearLayout.LayoutParams mcp = new LinearLayout.LayoutParams(-1, -2);
         mcp.setMargins(dp(2), dp(3), dp(2), dp(3));
         rightCol.addView(mapCard, mcp);
 
@@ -455,10 +455,15 @@ public class MainActivity extends Activity {
         mods = card(row2, "Mods");
         build = card(row2, "Game build");
         details.addView(row2);
+        dataQuietRow = new LinearLayout(this);
+        dataQuietRow.setGravity(Gravity.CENTER_VERTICAL);
+        dataQuietRow.setPadding(dp(8), dp(8), dp(8), dp(2));
         dataQuiet = text("", 14, GOOD, false);
-        dataQuiet.setPadding(dp(8), dp(8), dp(8), dp(2));
-        dataQuiet.setOnClickListener(x -> dataAction());
-        details.addView(dataQuiet);
+        dataQuietRow.addView(dataQuiet, new LinearLayout.LayoutParams(0, -2, 1));
+        dataQuietButton = pageButton("Rebuild");
+        dataQuietButton.setOnClickListener(x -> dataAction());
+        dataQuietRow.addView(dataQuietButton);
+        details.addView(dataQuietRow);
         TextView setupLink = text("Setup checks", 14, ACCENT, true);
         setupLink.setPadding(dp(8), dp(8), dp(8), dp(8));
         setupLink.setOnClickListener(x -> { setupOpen = !setupOpen; if (lastView != null) showSetup(lastView); });
@@ -651,10 +656,17 @@ public class MainActivity extends Activity {
         dataButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
         if (label != null) dataButton.setText(label);
         // 0.16.0: ready data is not news: one line in Details (tap to rebuild) instead of a card on Status.
-        boolean quiet = d.state == DataStatus.State.READY || d.state == DataStatus.State.PC_PACK;
+        // Quiet only when the pack is usable too (its names load); a damaged pack keeps the card and its Rebuild.
+        boolean quiet = (d.state == DataStatus.State.READY || d.state == DataStatus.State.PC_PACK) && loadReference() != null;
         if (!bareShown) dataCard.setVisibility(quiet ? View.GONE : View.VISIBLE);
-        dataQuiet.setVisibility(quiet ? View.VISIBLE : View.GONE);
-        if (quiet) dataQuiet.setText("\u2713 " + d.line.replaceAll("\\.$", "") + (label != null ? " \u00b7 " + label : ""));
+        if (!quiet && (d.state == DataStatus.State.READY || d.state == DataStatus.State.PC_PACK) && referenceProblem != PACK_HELD) {
+            dataLine.setText("Some game data can't be read (" + referenceProblem + "). Rebuild it.");
+        }
+        dataQuietRow.setVisibility(quiet ? View.VISIBLE : View.GONE);
+        if (quiet) {
+            dataQuiet.setText("\u2713 " + d.line.replaceAll("\\.$", ""));
+            dataQuietButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
+        }
     }
 
     /** 0.16.0: the Setup card, from SetupFlow over what the app observes now (SetupInputs). v is null before file access. */
@@ -693,6 +705,8 @@ public class MainActivity extends Activity {
         o.installSynced = installSynced;
         o.bundledSig = bundledSig;
         o.loaderStatus = o.storageGranted ? DataFiles.jsonObject(new File(dir, "loader_status.json"), LoaderStatus.MAX_BYTES) : null;
+        if (o.storageGranted && o.loaderStatus == null)                          // only matters before the first game start
+            o.bootstrap = SetupInputs.bootstrap(DataFiles.readText(new File(INSTALL_DIR, "result.txt"), 4096));
         Snapshot cur = v != null ? v.current : null;
         o.transport = v != null ? v.transport.name() : "NO_DATA";
         o.accepted = cur != null && !cur.synthetic;
@@ -843,10 +857,17 @@ public class MainActivity extends Activity {
     Reference loadReference() {
         if (reference != null) return reference;
         if (!data.packReadable()) { referenceProblem = PACK_HELD; return null; }
-        byte[] data = DataFiles.readBytes(new File(referenceDir, "reference.json"), Reference.MAX_BYTES);
+        File refFile = new File(referenceDir, "reference.json");
+        if (referenceFailedStamp > 0 && refFile.lastModified() == referenceFailedStamp) return null;   // same bad file
+        byte[] data = DataFiles.readBytes(refFile, Reference.MAX_BYTES);
         if (data == null) { referenceProblem = "reference.json missing"; return null; }
         reference = Reference.parse(new String(data, StandardCharsets.UTF_8));
-        if (reference == null) { referenceProblem = "reference.json unreadable"; return null; }
+        if (reference == null) {
+            referenceProblem = "reference.json unreadable";
+            referenceFailedStamp = refFile.lastModified();
+            return null;
+        }
+        referenceFailedStamp = -1;
         final Reference r = reference;
         bindGear();
         bestiaryView.bind(new ReferenceView.Source() {
@@ -1121,7 +1142,7 @@ public class MainActivity extends Activity {
         r.setPadding(dp(8), dp(3), dp(8), dp(4));
         r.setBackground(round(TRACK, 6));
         r.setAlpha(stale ? 0.55f : 1f);
-        boolean ko = Boolean.TRUE.equals(m.ko) || Party.tone(m.hp) == 3;
+        boolean ko = m.ko != null ? m.ko : Party.tone(m.hp) == 3;   // the game script's flag wins; HP 0 only without it
 
         LinearLayout top = new LinearLayout(this);
         top.setGravity(Gravity.CENTER_VERTICAL);
@@ -1234,7 +1255,9 @@ public class MainActivity extends Activity {
                 sb.append(Target.ELEMENTS[i]);
                 ChipSpan.Style st = g.kind == Target.Group.Kind.ABSORB ? ChipSpan.Style.OUTLINE
                         : g.kind == Target.Group.Kind.IMMUNE ? ChipSpan.Style.STRUCK : ChipSpan.Style.FILL;
-                sb.setSpan(new ChipSpan(ELEMENT_COLORS[i], BG, st, density), s0, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                int col = g.kind == Target.Group.Kind.HALF ? (ELEMENT_COLORS[i] & 0x00FFFFFF) | 0x80000000 : ELEMENT_COLORS[i];
+                sb.setSpan(new ChipSpan(col, g.kind == Target.Group.Kind.HALF ? TEXT : BG, st, density), s0, sb.length(),
+                        android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 sb.append(" ");
             }
         }
@@ -1289,7 +1312,9 @@ public class MainActivity extends Activity {
         Long mapId = Json.lng(m, "mapId");
         // 0.16.0: never a raw map number: names come with the game data; a stale location says it's the last known one.
         boolean noNames = !Place.hasNames() && mapId != null && mapId >= 0 && !Place.title(mapId);
-        locationName.setText(noNames ? "Area names need the game data" : Place.name(mapId));
+        String areaName = Place.name(mapId);
+        if (!noNames && mapId != null && mapId >= 0 && areaName.equals("Map " + mapId)) areaName = "Unknown area";
+        locationName.setText(noNames ? "Area names need the game data" : areaName);
         String from = noNames ? "" : Place.from(mapId, Json.lng(m, "previousMapId"));
         if (v.locationFamily.state == ReceiverState.FamilyState.STALE && !Place.loading(mapId))
             from = from.isEmpty() ? "Last known" : "Last known \u00b7 " + from;
@@ -1458,7 +1483,9 @@ public class MainActivity extends Activity {
         Build build = why == null && live ? Build.parse(Json.obj(s.data, "build")) : null;
         LicenceNodes nodes = build != null ? licenceNodes.get() : null;
         gambitsView.setBuild(build, nodes);
-        gambitsView.setPlans(ms != null ? GambitPlan.suggest(build, nodes, reference, ms, build != null ? boards() : null) : null);
+        int liveWeak = 0;                                   // 0.16.0: what the party is fighting right now
+        if (build != null) for (Target.Enemy e : Target.enemies(Json.obj(s.data, "target"))) liveWeak |= e.weak;
+        gambitsView.setPlans(ms != null ? GambitPlan.suggest(build, nodes, reference, ms, build != null ? boards() : null, liveWeak) : null);
         GambitEdit.State es = s != null ? GambitEdit.parse(Json.obj(s.data, "gambitEdit")) : null;
         gambitsView.setEditor(es, new File(dir.getParentFile(), "cmd"), why == null && ms != null && live);
         String st = why != null ? why                          // 0.22.0: say something only when it matters

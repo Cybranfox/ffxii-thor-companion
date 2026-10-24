@@ -60,6 +60,9 @@ final class SetupText {
         LINES.put("script_reported_start_failure", "The game script didn't start. See the setup steps.");
         LINES.put("script_reported_result_unknown", "The game reported something this app doesn't know. See the setup steps.");
         LINES.put("script_wait_install", "Needs the setup files first.");
+        LINES.put("loader_installed_start_game", "Loader installed. Start FFXII to finish setup.");
+        LINES.put("loader_installed_warning", "Loader installed, but install.cmd couldn't find the mod loaders or the C++ runtime (see result.txt in the install folder). Start FFXII to check.");
+        LINES.put("loader_install_failed", "install.cmd couldn't install the loader. Its result.txt in the install folder says why.");
         LINES.put("script_wait_loader", "Needs the loader first (install.cmd).");
 
         LINES.put("data_ready", "Game data ready.");
