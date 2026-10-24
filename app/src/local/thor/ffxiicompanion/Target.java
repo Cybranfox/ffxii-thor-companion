@@ -72,6 +72,17 @@ final class Target {
     }
 
     /** "Fire, Ice" for a mask, or "" when no bit is set. */
+    /**
+     * The data pack's bestiary entry for an enemy, or null. The pack is asked for only when the enemy has a key, and
+     * through the supplier, not a field: on the Status tab nothing else may have loaded it yet (a fresh start that
+     * never opens another tab showed every target as "Enemy").
+     */
+    static Reference.Entry entry(Enemy e, java.util.function.Supplier<Reference> pack) {
+        if (e.bestiary == null) return null;
+        Reference r = pack.get();
+        return r != null ? r.bestiaryByKey(e.bestiary) : null;
+    }
+
     static String elements(int mask) {
         StringBuilder b = new StringBuilder();
         for (int i = 0; i < ELEMENTS.length; i++) {

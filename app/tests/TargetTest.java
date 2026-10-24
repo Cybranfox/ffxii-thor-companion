@@ -47,6 +47,16 @@ public final class TargetTest {
                 + "{\"entry\":77,\"name\":\"Test Wolf\",\"locations\":[\"Somewhere\"],\"pages\":[[\"A line\"]]}]}");
         check(r != null && r.bestiaryByKey(77) != null && r.bestiaryByKey(77).name.equals("Test Wolf") && r.bestiaryByKey(78) == null,
                 "bestiary entry by the game's key");
-        System.out.println("PASS TargetTest 10 checks (grouping, leader first, affinity names, gates, bestiary join)");
+        // 24 Oct: the card asks for the pack itself (nothing else may have loaded it on the Status tab).
+        int[] loads = {0};
+        Target.Enemy named = Target.enemies(t).get(0);
+        Reference.Entry got = Target.entry(named, () -> { loads[0]++; return r; });
+        check(got != null && got.name.equals("Test Wolf") && loads[0] == 1,
+                "a target with a key loads the pack on demand and shows its name, with no tab visited first");
+        Target.Enemy unkeyed = new Target.Enemy();
+        check(Target.entry(unkeyed, () -> { loads[0]++; return r; }) == null && loads[0] == 1,
+                "no key: unnamed, and the pack isn't read for it");
+        check(Target.entry(named, () -> null) == null, "pack not readable (being replaced): unnamed, no crash");
+        System.out.println("PASS TargetTest 13 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
     }
 }

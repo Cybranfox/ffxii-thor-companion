@@ -623,6 +623,9 @@ public class MainActivity extends Activity {
         dataBar.setVisibility(d.progress >= 0 ? View.VISIBLE : View.GONE);
         if (d.progress >= 0) dataBar.setProgress((int) Math.round(d.progress * 1000));
         dataShown = d.action;
+        // Read the pack's names once while idle, not in the first fight's target card (~400 KB parse, cached after).
+        if (reference == null && referenceProblem == null && data.packReadable() && v.transport != ReceiverState.Transport.LIVE)
+            loadReference();
         String label = DataStatus.label(d.action);
         dataButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
         if (label != null) dataButton.setText(label);
@@ -1155,7 +1158,7 @@ public class MainActivity extends Activity {
         r.setOrientation(LinearLayout.VERTICAL);
         r.setPadding(dp(8), dp(4), dp(8), dp(5));
         r.setBackground(round(TRACK, 6));
-        Reference.Entry entry = reference != null && e.bestiary != null ? reference.bestiaryByKey(e.bestiary) : null;
+        Reference.Entry entry = Target.entry(e, this::loadReference);
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
         TextView n = text(entry != null ? entry.name : "Enemy", 14, TEXT, true);
