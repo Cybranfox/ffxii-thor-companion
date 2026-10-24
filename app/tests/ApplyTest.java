@@ -30,7 +30,7 @@ public final class ApplyTest {
         Build build = Build.parse(obj(dir.resolve("build_before.json")));
         LicenceNodes nodes = LicenceNodes.parse(obj(dir.resolve("licence_nodes.json")));
         Reference ref = Reference.parse(new String(Files.readAllBytes(Paths.get(args[1])), StandardCharsets.UTF_8));
-        List<GambitPlan.Plan> plans = GambitPlan.suggest(build, nodes, ref, ms);
+        List<GambitPlan.Plan> plans = GambitPlan.suggest(build, nodes, ref, ms, null);
         Gambits.Member vaan = ms.get(0);
         GambitPlan.Plan vp = plans.get(0);
         List<ApplyPlan.Step> steps = ApplyPlan.steps(vaan, vp);

@@ -12,7 +12,8 @@ import java.util.Set;
 
 /**
  * Gambit suggestions on REAL data: build/ownership from the Thor dump (tests/out/build), the live licence table, the
- * modded reference bundle (args[1]) and the party's gambits from the Thor probe dump (args[2]). Prints the plans.
+ * modded reference bundle (args[1]) and the party's gambits from the Thor probe dump (args[2]); job labels from boards.json
+ * (args[3], optional). Prints the plans.
  */
 public final class GambitPlanTest {
     static int passed;
@@ -38,6 +39,10 @@ public final class GambitPlanTest {
         g.put("contract", "ffxii.gambits.v1"); g.put("status", "ok"); g.put("stable", Boolean.TRUE);
         g.put("sets", String.join(",", java.util.Arrays.copyOf(Json.str(probe, "sets").split(","), 6)));
         List<Gambits.Member> cur = Gambits.parse(g);
+        LicenceBoards boards = args.length > 3 && Files.isRegularFile(Paths.get(args[3])) ? LicenceBoards.parse(obj(Paths.get(args[3]))) : null;
+        check(GambitPlan.jobName(null, 0).equals("board 1") && GambitPlan.jobName(null, 11).equals("board 12")
+                && GambitPlan.jobName(null, 0xFF) == null, "job labels without boards.json: \"board N\", none for no job (no built-in names)");
+        ok("job labels without boards.json: \"board N\", none for no job (no built-in names)");
 
         String[][] names = {{"60a3", "Ally: any"}, {"60c4", "Ally: status = KO"}, {"60b7", "Ally: HP < 30%"}, {"60b6", "Ally: HP < 40%"},
                 {"60b4", "Ally: HP < 60%"}, {"60c6", "Ally: status = Petrify"}, {"60cd", "Ally: status = Silence"},
@@ -47,8 +52,15 @@ public final class GambitPlanTest {
         for (String[] n : names) check(n[1].equals(ref.conditionName(Integer.parseInt(n[0], 16))), n[0] + " = " + ref.conditionName(Integer.parseInt(n[0], 16)));
         ok("all " + names.length + " rule conditions match the modded game text by name");
 
-        List<GambitPlan.Plan> plans = GambitPlan.suggest(build, nodes, ref, cur);
+        List<GambitPlan.Plan> plans = GambitPlan.suggest(build, nodes, ref, cur, boards);
         check(plans != null && plans.size() == 6, "six plans");
+        if (boards != null) {
+            for (GambitPlan.Plan p : plans) {
+                Build.Member bm = build.members.get(p.member);
+                if (bm.job1 < 12) check(p.jobs.startsWith(boards.board(bm.job1).name), "member " + p.member + " job label from boards.json");
+            }
+            ok("job labels from boards.json (the names decoded from the game files)");
+        }
         Set<Integer> items = new HashSet<>();
         for (int a = 0x52; a <= 0x91; a++) if (build.available(a) > 0) items.add(a);   // live stock (0.16.0)
         check(build.stockKnown() && !items.contains(0x5F), "Chronos Tear (0 left) is never suggested");
@@ -122,8 +134,8 @@ public final class GambitPlanTest {
         check(ItemCheck.check(mine.get(5), Build.parse(bj), nodes, ref).isEmpty(), "no stock data -> no warnings (never guessed)");
         ok("item check: Penelo's ON Chronos Tear (0 left) warned with 'switch OFF'; Potion out -> Hi-Potion; nothing guessed without stock");
 
-        check(GambitPlan.suggest(null, nodes, ref, cur) == null && GambitPlan.suggest(build, null, ref, cur) == null
-                && GambitPlan.suggest(build, nodes, null, cur) == null, "missing inputs -> no plan");
+        check(GambitPlan.suggest(null, nodes, ref, cur, null) == null && GambitPlan.suggest(build, null, ref, cur, null) == null
+                && GambitPlan.suggest(build, nodes, null, cur, null) == null, "missing inputs -> no plan");
         ok("missing build / licence table / reference -> no suggestions (never guessed)");
         System.out.println(passed + " gambit plan checks passed (real Thor data)");
     }

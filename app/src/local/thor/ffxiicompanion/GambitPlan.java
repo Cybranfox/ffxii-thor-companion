@@ -20,9 +20,6 @@ import java.util.Set;
  * Jegged gambit notes; see the doc for links). Roles come from usable abilities, jobs only break ties.
  */
 final class GambitPlan {
-    static final String[] JOBS = {"White Mage", "Uhlan", "Machinist", "Red Battlemage", "Knight", "Monk", "Time Battlemage",
-            "Foebreaker", "Archer", "Black Mage", "Bushi", "Shikari"};
-
     // conditions (names checked against the modded game text in tests)
     static final int ALLY_ANY = 0x60A3, ALLY_KO = 0x60C4, ALLY_HP30 = 0x60B7, ALLY_HP40 = 0x60B6, ALLY_HP60 = 0x60B4,
             ALLY_PETRIFY = 0x60C6, ALLY_SILENCE = 0x60CD, ALLY_POISON = 0x60CC, ALLY_BLIND = 0x60CB, ALLY_SLEEP = 0x60C8,
@@ -57,13 +54,23 @@ final class GambitPlan {
         return -1;
     }
 
-    static String jobs(Build.Member bm) {
-        String a = bm.job1 < JOBS.length ? JOBS[bm.job1] : null, b = bm.job2 < JOBS.length ? JOBS[bm.job2] : null;
+    /** A job's name from the data pack's boards.json (0.16.0: decoded from the game files), or "board N" without it. */
+    static String jobName(LicenceBoards boards, int job) {
+        if (job < 0 || job >= 12) return null;
+        LicenceBoards.Board b = boards != null ? boards.board(job) : null;
+        return b != null && b.name != null && !b.name.isEmpty() ? b.name : "board " + (job + 1);
+    }
+
+    static String jobs(Build.Member bm, LicenceBoards boards) {
+        String a = jobName(boards, bm.job1), b = jobName(boards, bm.job2);
         return a == null ? (b == null ? "no job" : b) : b == null ? a : a + " / " + b;
     }
 
-    /** Suggestions for all six members, or null when the inputs are missing (no ownership, licences or reference). */
-    static List<Plan> suggest(Build build, LicenceNodes nodes, Reference ref, List<Gambits.Member> current) {
+    /**
+     * Suggestions for all six members, or null when the inputs are missing (no ownership, licences or reference).
+     * boards (optional) only names the jobs.
+     */
+    static List<Plan> suggest(Build build, LicenceNodes nodes, Reference ref, List<Gambits.Member> current, LicenceBoards boards) {
         if (build == null || nodes == null || ref == null || !build.ownershipKnown()) return null;
         Set<Integer> conds = new HashSet<>(build.gambits);
         List<Set<Integer>> can = new ArrayList<>();
@@ -149,7 +156,7 @@ final class GambitPlan {
                 for (int i = s.size() - 1; i >= 0 && drop < 0; i--) if (s.get(i).condition == ALLY_ANY) drop = i;
                 s.remove(drop >= 0 ? drop : s.size() - 3);
             }
-            out.add(new Plan(m, role, jobs(bm), Collections.unmodifiableList(s)));
+            out.add(new Plan(m, role, jobs(bm, boards), Collections.unmodifiableList(s)));
         }
         return out;
     }

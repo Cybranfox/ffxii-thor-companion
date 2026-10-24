@@ -39,7 +39,7 @@ E="${FFXII_EVIDENCE:-}"   # private real-game dumps; tests skip without them
 if [ -f "$E/save_27.bin" ] && [ -f "$E/save_185.bin" ]; then
   python -I tests/gen_build_fixture.py "$E/licence_nodes.json" tests/out/build before="$E/save_27.bin" after="$E/save_185.bin"
   "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.BuildTest tests/out/build
-  "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.GambitPlanTest tests/out/build "${REFERENCE_JSON:-}" "${GAMBIT_DUMP:-}"
+  "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.GambitPlanTest tests/out/build "${REFERENCE_JSON:-}" "${GAMBIT_DUMP:-}" "${BOARDS_JSON:-}"
   if [ -f "${BOARDS_JSON:-}" ]; then
     python -I tests/gen_boards_expected.py "${BOARDS_JSON:-}" "$E/save_27.bin" tests/out/boards_expected.json
     "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.LicenceBoardsTest "${BOARDS_JSON:-}" tests/out/build/build_before.json tests/out/boards_expected.json

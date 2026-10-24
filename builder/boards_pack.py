@@ -1,9 +1,10 @@
 """Builds boards.json for the companion's Licences tab from the user's OWN game files (never shipped in the APK):
 the 12 licence boards (board_N.bin, 'licd' + u16 w,h + w*h u16 node ids, 0xFFFF empty) and each licence node's name
 (battle-pack section 12 record +0 = name text id -> section 61), from the deployed (modded) battle pack.
-Job j uses board_(j+1) (Gambit_Autobuilder_2026-10-21.md). Costs, types, grants and ownership stay live (logger).
+Job j uses board_(j+1) (Gambit_Autobuilder_2026-10-21.md), named from menu_command.bin (job_names.py). Costs, types,
+grants and ownership stay live (logger).
 
-Usage: python -B boards_pack.py <boards_dir> <battle_pack.bin> <out boards.json>
+Usage: python -B boards_pack.py <boards_dir> <battle_pack.bin> <out boards.json> <menu_command.bin>
 """
 import hashlib
 import json
@@ -13,9 +14,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from gambit_names import sections, decode  # noqa: E402
-
-JOBS = ["White Mage", "Uhlan", "Machinist", "Red Battlemage", "Knight", "Monk", "Time Battlemage",
-        "Foebreaker", "Archer", "Black Mage", "Bushi", "Shikari"]
+from job_names import job_names  # noqa: E402
 
 
 def table(d):
@@ -26,6 +25,7 @@ def table(d):
 
 def main():
     bdir, pack_path, out = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+    jobs = job_names(Path(sys.argv[4]).read_bytes())
     pack = pack_path.read_bytes()
     ss = sections(pack)
     texts = [table(x) for x in table(ss[61])]
@@ -45,7 +45,7 @@ def main():
         if nm: nm = nm.replace('{a0}', '&').replace('{81}', 'ú')   # two glyphs gambit_names.decode doesn't map
         if nm: names[str(n)] = nm
     boards = []
-    for j, job in enumerate(JOBS):
+    for j, job in enumerate(jobs):
         raw = (bdir / f'board_{j + 1}.bin').read_bytes()
         assert raw[:4] == b'licd'
         w, h = struct.unpack_from('<HH', raw, 4)

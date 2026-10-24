@@ -21,8 +21,9 @@ jobs:
         run: bash game-script/tests/run_tests.sh
       - name: Data builder imports
         run: |
-          python -B -c "import sys; sys.path.insert(0, 'builder'); import build_data_pack, vanilla_fallback, reference_pack, mapatlas_pack"
+          python -B -c "import sys; sys.path.insert(0, 'builder'); import build_data_pack, vanilla_fallback, reference_pack, mapatlas_pack, boards_pack"
           python -B builder/tests/test_menumap_names.py
+          python -B builder/tests/test_job_names.py
           python -B builder/tests/test_menumap_icons.py
           python -B builder/tests/test_objectives_pack.py
           python -B builder/tests/test_mapatlas_pixels.py

@@ -1069,7 +1069,7 @@ public class MainActivity extends Activity {
         Build build = why == null && live ? Build.parse(Json.obj(s.data, "build")) : null;
         LicenceNodes nodes = build != null ? licenceNodes.get() : null;
         gambitsView.setBuild(build, nodes);
-        gambitsView.setPlans(ms != null ? GambitPlan.suggest(build, nodes, reference, ms) : null);
+        gambitsView.setPlans(ms != null ? GambitPlan.suggest(build, nodes, reference, ms, build != null ? boards() : null) : null);
         GambitEdit.State es = s != null ? GambitEdit.parse(Json.obj(s.data, "gambitEdit")) : null;
         gambitsView.setEditor(es, new File(dir.getParentFile(), "cmd"), why == null && ms != null && live);
         String st = why != null ? why                          // 0.22.0: say something only when it matters

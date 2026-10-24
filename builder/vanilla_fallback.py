@@ -13,7 +13,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from vbf_extract import open_vbf, extract
 from gambit_names import sections, condition_names, decode
-from boards_pack import JOBS
+from job_names import job_names, MENU_COMMAND
 DEFAULT = Path('C:/Program Files (x86)/Steam/steamapps/common/FINAL FANTASY XII THE ZODIAC AGE')
 
 def digest(value):
@@ -93,7 +93,7 @@ def build(install=DEFAULT, lang='us'):
         nodes = records(12)
         names = {str(i): text(struct.unpack_from('<H', row)[0]) for i,row in enumerate(nodes)}
         boards = []
-        for j, job in enumerate(JOBS):
+        for j, job in enumerate(job_names(read(MENU_COMMAND.format(lang=lang)))):
             # Western-language VBF directories omit board_N. Explicit shared layout fallback;
             # byte equality against the deployed boards is separately checked by the test.
             path = f'ps2data/image/ff12/test_battle/{lang}/binaryfile/board_{j+1}.bin'

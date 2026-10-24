@@ -19,6 +19,7 @@ public final class BuildInfoStep {
       "Foedex Clan Primer Text Replacer (bestiary)",r.get("bestiaryModPresent"));
     TreeMap<String,Object> sources=new TreeMap<>();sources.put(PACK,inputs.sourceHash(PACK));sources.put(AREAS,inputs.sourceHash(AREAS));
     for(int n=1;n<=12;n++){String p="ps2data/image/ff12/test_battle/in/binaryfile/board_"+n+".bin";sources.put(p,inputs.sourceHash(p));}
+    sources.put(DataBuilder.MENU_COMMAND,inputs.sourceHash(DataBuilder.MENU_COMMAND));   //0.16: licence board names
     return Json.object("included",included,"optionalMods",mods,"sources",sources,
       "note","Made from your own game files for your personal use. Do not share this folder.");
   }
