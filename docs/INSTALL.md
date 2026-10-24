@@ -1,6 +1,6 @@
 # Install, update and remove
 
-Tested setup: AYN Thor (Android 13), GameNative, FINAL FANTASY XII THE ZODIAC AGE (Steam) 1.0.4.0,
+Tested setup: AYN Thor Max (Android 13), GameNative 1.3.0, FINAL FANTASY XII THE ZODIAC AGE (Steam) 1.0.4.0,
 FF12 External File Loader 1.6.1 + FF12 LUA Script Loader 2.0.1 (1.4.x + 1.7.1 also work, but 1.7.1 often hangs on exit).
 
 In GameNative's container (Wine), drive **A:** is the game folder and drive **D:** is the Thor's **Download** folder.
@@ -17,6 +17,7 @@ Skip this if the loaders already work for you (other Lua mods load).
    manager. After this, `A:\x64` has `dinput8.dll`, `ff12-trampoline.dll`, `hook.ini`, and a `modules` folder with
    `ff12-file-loader.dll` and `ff12-lua-loader.dll`.
 3. In the game's GameNative settings, turn on **Enable mod loaders**. It makes Wine load the loader's `dinput8.dll`.
+   My full container settings are in the README under [My setup](../README.md#my-setup-recommended).
 4. **C++ runtime (needed under GameNative).** The loaders need Microsoft's Visual C++ runtime **14.40 or newer**. The
    container's built-in one is older, and the game then crashes at start with `c0000005`. Copy `msvcp140.dll`,
    `vcruntime140.dll` and `vcruntime140_1.dll` from a Windows PC with the current

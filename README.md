@@ -32,7 +32,8 @@ There are three pieces, and each only does its own job:
 
 ## Requirements
 
-- **AYN Thor** (Android 13) with **GameNative** and **FINAL FANTASY XII THE ZODIAC AGE from Steam, version 1.0.4.0**.
+- **AYN Thor** (Android 13; I use the Thor Max) with **GameNative** and **FINAL FANTASY XII THE ZODIAC AGE from Steam,
+  version 1.0.4.0**. My exact GameNative settings are below.
   Other game builds are detected and the companion stays read-only and blank.
 - **Required mods:** ffgriever's [FF12 External File Loader](https://www.nexusmods.com/finalfantasy12/mods/170) and
   [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171). Use the current versions (tested: LUA Script Loader 2.0.1 with External File Loader 1.6.1). 1.7.1 still works but often hangs when the game closes.
@@ -43,6 +44,42 @@ There are three pieces, and each only does its own job:
 
 No other mods are needed. If you use *The Insurgent's Manifesto*, its 36-slot single gambit list mode is not supported
 by the editor (the editor refuses to run then). Everything else still works.
+
+## My setup (recommended)
+
+This is exactly what I play on. If you're setting up from scratch, copy it and you should be up and running quickly.
+
+- **Device:** AYN Thor **Max** (16 GB RAM, 1 TB), Android 13. Other Thor models should work, but I haven't tested them.
+- **GameNative:** 1.3.0.
+- **Game:** FINAL FANTASY XII THE ZODIAC AGE from Steam, 1.0.4.0.
+- **Loaders:** FF12 External File Loader 1.6.1 + FF12 LUA Script Loader 2.0.1.
+
+In GameNative: FINAL FANTASY XII › ⚙ › **Edit container**.
+
+| Tab | Setting | What I use |
+|---|---|---|
+| General | Container Variant | bionic |
+| General | Wine Version | proton-10.0-arm64ec-2 |
+| General | Screen Size | 1280x720 (16:9) |
+| General | Audio Driver | PulseAudio (low latency mode off) |
+| General | **Enable mod loaders** | **On** (the loaders need it) |
+| Graphics | Graphics Driver | Wrapper |
+| Graphics | Graphics Driver Version | turnip_v26.0.0_R8 |
+| Graphics | Use Adrenotools Turnip | On |
+| Graphics | Display Renderer | Vulkan |
+| Graphics | DX Wrapper | DXVK, version 2.4.1-gplasync |
+| Graphics | Max Device Memory | 4096 MB |
+| Graphics | Present Modes / Renderer Present Mode | mailbox / fifo |
+| Graphics | Use DRI3 | On |
+| Emulation | 64-bit and 32-bit Emulator | FEXCore (version 2512, preset Intermediate) |
+| Emulation | Box64 | 0.3.6, preset Compatibility |
+
+Everything else is left at GameNative's defaults. Most of the table is what GameNative sets up for FFXII by itself; the
+one you have to change is **Enable mod loaders**. In the in-game Quick Menu I keep the FPS limiter on at 60.
+
+What to expect: over a 10-minute session with these settings it averaged 58 fps (median 60), dipping into the high
+40s in busy fights and when a new area loads. GameNative's compatibility page lists FFXII as "Unreliable" on the Thor,
+but with this setup it plays well for me. The one real problem is the exit hang below.
 
 ## How credentials are handled
 
