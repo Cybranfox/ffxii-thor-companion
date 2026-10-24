@@ -32,7 +32,7 @@ jobs:
           mkdir -p ~/.android
           keytool -genkeypair -keystore ~/.android/debug.keystore -storepass android -keypass android \
             -alias androiddebugkey -keyalg RSA -validity 1 -dname "CN=CI" > /dev/null
-          bash app/build.sh
+          DEBUG_SIGN=1 bash app/build.sh
       - name: No network permission and no game text in the APK
         run: |
           perms=$("$ANDROID_HOME/build-tools/35.0.1/aapt2" dump permissions app/build/ffxii-companion.apk)

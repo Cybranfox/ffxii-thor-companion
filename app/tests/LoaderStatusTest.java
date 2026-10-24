@@ -16,6 +16,8 @@ public final class LoaderStatusTest {
             check(m != null && m.startsWith("The game reports: ") && m.endsWith("."), r);
         }
         check(LoaderStatus.message("stub_old").contains("install.cmd") && LoaderStatus.message("tampered").contains("restart the game"), "next steps");
+        check(LoaderStatus.message("unsupported_lua").contains("2.0.1") && !LoaderStatus.message("unsupported_lua").contains("1.7.1"),
+                "unsupported loader: points to the tested 2.0.1, not the old 1.7.1");
         check(LoaderStatus.restorable("tampered") && LoaderStatus.restorable("missing") && !LoaderStatus.restorable("rollback")
                 && !LoaderStatus.restorable("ok"), "the app restores its own files only for tampered/missing scripts");
         check(LoaderStatus.updateHint("0.10.0-beta", "0.11.0-beta", false).contains("install.cmd"), "old single-file script: one install.cmd");
@@ -26,6 +28,6 @@ public final class LoaderStatusTest {
         try { Json.parse("{\"seq\":1e999}"); } catch (IllegalArgumentException e) { inf = true; }
         check(dup && inf, "JSON: duplicate keys and out-of-range numbers are refused");
         check(Json.lng(Json.parse("{\"n\":2.5}"), "n") == null && Json.lng(Json.parse("{\"n\":3.0}"), "n") == 3L, "only whole numbers become longs");
-        System.out.println("PASS LoaderStatusTest 24 checks (strict receipt, fixed messages, loader-aware update hint)");
+        System.out.println("PASS LoaderStatusTest 25 checks (strict receipt, fixed messages, loader-aware update hint)");
     }
 }

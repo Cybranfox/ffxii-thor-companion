@@ -66,6 +66,13 @@ def load_release_env():
         if '=' in line:
             k, v = line.split('=', 1)
             env[k.strip()] = v.strip()
+    missing = [k for k in ('RELEASE_KEYSTORE', 'RELEASE_KEYSTORE_PASS', 'RELEASE_KEY_ALIAS') if not env.get(k)]
+    if missing:
+        sys.exit(f'{f} is missing {", ".join(missing)}: a release must not fall back to the debug key')
+    ks = re.sub(r'^/([a-zA-Z])/', r'\1:/', env['RELEASE_KEYSTORE'])   # Git Bash form /c/... (build.sh reads it as is)
+    if not Path(ks).is_file():
+        sys.exit(f'release keystore not found: {env["RELEASE_KEYSTORE"]}')
+    env.pop('DEBUG_SIGN', None)
     return env
 
 

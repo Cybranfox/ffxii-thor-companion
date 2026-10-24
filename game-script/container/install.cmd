@@ -3,7 +3,7 @@ rem FFXII Thor Companion: installs the companion's small loader, ThorCompanion.l
 rem again only if a release note says the loader itself changed): after that, installing a new companion APK is the
 rem whole update, because the loader checks the signed game script at every game start.
 rem Run inside the game's GameNative container (Wine): A: = the game folder, D: = the device's Download folder.
-rem Changes: A:\x64\scripts\ThorCompanion.lua (any previous copy is kept in this folder first) and creates
+rem Changes: A:\x64\scripts\ThorCompanion.lua (the copy it replaces is kept in this folder first) and creates
 rem A:\x64\scripts\ThorCompanion-state\ (the loader's private record of the newest version it has accepted).
 setlocal
 set "HERE=%~dp0"
@@ -19,9 +19,11 @@ if defined MISSING echo WARNING: FF12 External File Loader / LUA Script Loader n
 if not exist "%X%\msvcp140.dll" echo WARNING: no msvcp140.dll in x64. Under GameNative the loaders need the app-local C++ runtime (see INSTALL). >> "%RES%"
 if not exist "%X%\scripts" mkdir "%X%\scripts"
 if not exist "%X%\scripts\ThorCompanion-state" mkdir "%X%\scripts\ThorCompanion-state"
-rem Keep the copy that is being replaced, but not when it is this same file (running install.cmd twice must not
-rem overwrite the backup with the new file). Wine has no fc, so "same" = same size as the new file.
-if exist "%X%\scripts\ThorCompanion.lua" for %%A in ("%X%\scripts\ThorCompanion.lua") do for %%B in ("%HERE%ThorCompanion.lua") do if not "%%~zA"=="%%~zB" copy /b /y "%X%\scripts\ThorCompanion.lua" "%HERE%ThorCompanion.previous.lua" > nul
+rem Keep the copy that is being replaced. Wine has no fc, so nothing is compared: the first copy ever replaced stays
+rem in ThorCompanion.previous.lua for good (running install.cmd again can't overwrite it with the new file), and the
+rem copy this run replaces goes to ThorCompanion.replaced.lua (0.16.0: same-size files used to be taken as the same).
+if exist "%X%\scripts\ThorCompanion.lua" if not exist "%HERE%ThorCompanion.previous.lua" copy /b /y "%X%\scripts\ThorCompanion.lua" "%HERE%ThorCompanion.previous.lua" > nul
+if exist "%X%\scripts\ThorCompanion.lua" copy /b /y "%X%\scripts\ThorCompanion.lua" "%HERE%ThorCompanion.replaced.lua" > nul
 copy /b /y "%HERE%ThorCompanion.lua" "%X%\scripts\ThorCompanion.lua" > nul
 if errorlevel 1 (echo FAILED: could not copy into %X%\scripts >> "%RES%" & goto end)
 if not exist "%X%\scripts\ThorCompanion.lua" (echo FAILED: copy did not land >> "%RES%" & goto end)

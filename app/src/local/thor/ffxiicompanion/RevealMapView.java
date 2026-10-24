@@ -206,7 +206,7 @@ final class RevealMapView extends View {
         Regions.Part focus = null;
         for (Regions.Part p : parts) if (p.focus) focus = p;
         if (focus == null) return;
-        float[] b = Regions.bounds(parts, !interactive || areaFit);
+        float[] b = Regions.fit(parts, !interactive || areaFit, markerPx, markerPy);
         if (b == null) return;
         if (interactive && !areaFit) {
             // exits sit off the explored ground, at the end of their lines: fit them and their labels too

@@ -53,7 +53,8 @@ final class LoaderStatus {
                 m = "the loader couldn't read or save its safety record. In the game's container run uninstall.cmd, then install.cmd.";
                 break;
             case "unsupported_lua":
-                m = "this LUA Script Loader version isn't supported. Use FF12 LUA Script Loader 1.7.1.";
+                m = "this LUA Script Loader version isn't supported. Use FF12 LUA Script Loader "   // the tested one, as Setup says
+                        + SetupInputs.LUA_VERSIONS.get(0) + " with External File Loader " + SetupInputs.EFL_VERSIONS.get(0) + ".";
                 break;
             default:
                 m = "the verified game script couldn't start. Install the latest companion update and restart the game.";
