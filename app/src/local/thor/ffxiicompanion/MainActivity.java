@@ -138,6 +138,8 @@ public class MainActivity extends Activity {
     DataOwner data;
     int seenInstalls, seenFailures;
     TextView dataLine, dataButton;
+    LinearLayout dataCard;                       // 0.16.0: only while there's something to say; else one line in Details
+    TextView dataQuiet;
     LinearLayout setupCard, setupRows, liveBody, tabBar;
     long allSetUntil;                           // elapsedRealtime: show "All set" until then, after setup first completes
     boolean bareShown;                          // no file access yet: only the Setup card is shown
@@ -237,7 +239,8 @@ public class MainActivity extends Activity {
         root.addView(header);
 
         statusDetail = text("", 12, DIM, false);
-        statusDetail.setMaxLines(2);
+        statusDetail.setMaxLines(1);                     // 0.16.0: one line; the Setup card carries guidance
+        statusDetail.setEllipsize(TextUtils.TruncateAt.END);
         statusDetail.setEllipsize(TextUtils.TruncateAt.END);
         statusDetail.setPadding(0, dp(3), 0, dp(4));
         root.addView(statusDetail);
@@ -319,6 +322,17 @@ public class MainActivity extends Activity {
         setupCard.setVisibility(View.GONE);
         body.addView(setupCard, cardParams(-1, 0));
 
+        // 0.16.0: Status in two columns on the near-square bottom screen: Location, Targeting and Party on the left,
+        // the map as big as the row on the right (tap for the full map, as before).
+        LinearLayout statusRow = new LinearLayout(this);
+        LinearLayout leftCol = new LinearLayout(this);
+        leftCol.setOrientation(LinearLayout.VERTICAL);
+        LinearLayout rightCol = new LinearLayout(this);
+        rightCol.setOrientation(LinearLayout.VERTICAL);
+        statusRow.addView(leftCol, new LinearLayout.LayoutParams(0, -2, 45));
+        statusRow.addView(rightCol, new LinearLayout.LayoutParams(0, -1, 55));
+        body.addView(statusRow, new LinearLayout.LayoutParams(-1, -2));
+
         // Location: area name large on one line, then where from / ids.
         locationCard = cardShell();
         LinearLayout locHead = new LinearLayout(this);
@@ -341,7 +355,7 @@ public class MainActivity extends Activity {
         hintLine.setPadding(0, dp(3), 0, 0);
         hintLine.setVisibility(View.GONE);
         locationCard.addView(hintLine);
-        body.addView(locationCard, cardParams(-1, 0));
+        leftCol.addView(locationCard, cardParams(-1, 0));
 
         // Targeting (0.13.0): the enemy the party's pending actions are aimed at; only shown while there is one.
         targetCard = cardShell();
@@ -350,7 +364,7 @@ public class MainActivity extends Activity {
         targetRows.setOrientation(LinearLayout.VERTICAL);
         targetCard.addView(targetRows);
         targetCard.setVisibility(View.GONE);
-        body.addView(targetCard, cardParams(-1, 0));
+        leftCol.addView(targetCard, cardParams(-1, 0));
 
         // Map: the explored parts of the region around the current area (gated by Reveal), with the player marker.
         mapCard = cardShell();
@@ -363,15 +377,18 @@ public class MainActivity extends Activity {
         mapView = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK, TEXT, BG, 10, false);
         mapView.setVisibility(View.GONE);
         mapView.setOnClickListener(x -> openMap(true));
-        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-1, dp(190));
+        LinearLayout.LayoutParams mlp = new LinearLayout.LayoutParams(-1, 0, 1);   // fills the column's height
         mlp.topMargin = dp(4);
+        mapView.setMinimumHeight(dp(240));
         mapCard.addView(mapView, mlp);
         mapNote = text("", 12, DIM, false);
         mapNote.setMaxLines(2);
         mapNote.setEllipsize(TextUtils.TruncateAt.END);
         mapNote.setPadding(0, dp(3), 0, 0);
         mapCard.addView(mapNote);
-        body.addView(mapCard, cardParams(-1, 0));
+        LinearLayout.LayoutParams mcp = new LinearLayout.LayoutParams(-1, 0, 1);
+        mcp.setMargins(dp(2), dp(3), dp(2), dp(3));
+        rightCol.addView(mapCard, mcp);
 
         // Party: heading + chip, then one compact row per member (or one explanatory line).
         partyCard = cardShell();
@@ -389,7 +406,7 @@ public class MainActivity extends Activity {
         partyRow = new LinearLayout(this);
         partyRow.setOrientation(LinearLayout.VERTICAL);
         partyCard.addView(partyRow);
-        body.addView(partyCard, cardParams(-1, 0));
+        leftCol.addView(partyCard, cardParams(-1, 0));
 
         // Hunts (0.14.0, off by default): the game's own journal text for hunts you have accepted.
         huntsCard = cardShell();
@@ -403,7 +420,7 @@ public class MainActivity extends Activity {
         body.addView(huntsCard, cardParams(-1, 0));
 
         // 0.16.0: Game data: build it from the game on this device, see where it is, what to do when it stops.
-        LinearLayout dataCard = cardShell();
+        dataCard = cardShell();
         dataCard.addView(cardHeading("GAME DATA"));
         dataLine = body(dataCard);
         dataBar = new android.widget.ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
@@ -416,7 +433,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams dbp = new LinearLayout.LayoutParams(-2, -2);
         dbp.topMargin = dp(6);
         dataCard.addView(dataButton, dbp);
-        body.addView(dataCard, cardParams(-1, 0));
+        body.addView(dataCard, body.indexOfChild(statusRow), cardParams(-1, 0));   // above the columns while active
 
         // Secondary diagnostics: collapsed by default, one tap to open (touch only; the window stays non-focusable).
         detailsToggle = text("", 13, ACCENT, true);
@@ -438,6 +455,10 @@ public class MainActivity extends Activity {
         mods = card(row2, "Mods");
         build = card(row2, "Game build");
         details.addView(row2);
+        dataQuiet = text("", 14, GOOD, false);
+        dataQuiet.setPadding(dp(8), dp(8), dp(8), dp(2));
+        dataQuiet.setOnClickListener(x -> dataAction());
+        details.addView(dataQuiet);
         TextView setupLink = text("Setup checks", 14, ACCENT, true);
         setupLink.setPadding(dp(8), dp(8), dp(8), dp(8));
         setupLink.setOnClickListener(x -> { setupOpen = !setupOpen; if (lastView != null) showSetup(lastView); });
@@ -629,6 +650,11 @@ public class MainActivity extends Activity {
         String label = DataStatus.label(d.action);
         dataButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
         if (label != null) dataButton.setText(label);
+        // 0.16.0: ready data is not news: one line in Details (tap to rebuild) instead of a card on Status.
+        boolean quiet = d.state == DataStatus.State.READY || d.state == DataStatus.State.PC_PACK;
+        if (!bareShown) dataCard.setVisibility(quiet ? View.GONE : View.VISIBLE);
+        dataQuiet.setVisibility(quiet ? View.VISIBLE : View.GONE);
+        if (quiet) dataQuiet.setText("\u2713 " + d.line.replaceAll("\\.$", "") + (label != null ? " \u00b7 " + label : ""));
     }
 
     /** 0.16.0: the Setup card, from SetupFlow over what the app observes now (SetupInputs). v is null before file access. */
@@ -1001,8 +1027,7 @@ public class MainActivity extends Activity {
             setStatus("Not running", BAD, loaderProblem);
         } else switch (v.transport) {
             case NO_DATA:
-                setStatus("Waiting", DIM, "Start FFXII to begin. First time? Run install.cmd from Download/FFXII_companion/install"
-                        + " in the game's GameNative container (see README.txt there)." + bad);
+                setStatus("Waiting", DIM, ("Waiting for FFXII." + bad).trim());
                 break;
             case GAME_CLOSED:
                 setStatus("Game closed", DIM, "Last played " + Details.secs(v.transportAgeMs) + " ago." + bad);
@@ -1011,7 +1036,7 @@ public class MainActivity extends Activity {
                 setStatus("No signal", WARN, "Showing the last known state." + bad);
                 break;
             case STALE:
-                setStatus("Paused", WARN, "No update for " + Details.secs(v.transportAgeMs) + " (paused, loading or closed)." + bad);
+                setStatus("Paused", WARN, "No update for " + Details.secs(v.transportAgeMs) + "." + bad);
                 break;
             default: {
                 Map<String, Object> hello = v.current != null ? v.current.hello() : null;
@@ -1086,53 +1111,70 @@ public class MainActivity extends Activity {
         return "Not available (" + f.reason + ").";
     }
 
-    /** One compact row per member: name (+ leader/guest/KO) | HP value + bar | MP value + bar. */
+    /**
+     * 0.16.0, for the narrow column: name and HP numbers on one line, the HP bar (amber below half, red below a
+     * quarter, grey at KO), then MP. Status chips follow once the game script reports statuses.
+     */
     View memberRow(Party.Member m, boolean stale) {
         LinearLayout r = new LinearLayout(this);
-        r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setPadding(dp(8), dp(4), dp(8), dp(5));
+        r.setOrientation(LinearLayout.VERTICAL);
+        r.setPadding(dp(8), dp(3), dp(8), dp(4));
         r.setBackground(round(TRACK, 6));
         r.setAlpha(stale ? 0.55f : 1f);
+        boolean ko = Boolean.TRUE.equals(m.ko) || Party.tone(m.hp) == 3;
 
-        LinearLayout who = new LinearLayout(this);
-        who.setOrientation(LinearLayout.VERTICAL);
-        TextView n = text((m.leader ? "★ " : "") + (m.name != null ? m.name : "Unknown"), 14, TEXT, true);
+        LinearLayout top = new LinearLayout(this);
+        top.setGravity(Gravity.CENTER_VERTICAL);
+        String tags = ("active".equals(m.role) ? "" : " · " + m.role.toUpperCase()) + (ko ? " · KO" : "");
+        TextView n = text((m.leader ? "★ " : "") + (m.name != null ? m.name : "Unknown") + tags, 16, ko ? DIM : TEXT, true);
         oneLine(n);
-        who.addView(n);
-        String tags = ("active".equals(m.role) ? "" : m.role.toUpperCase()) + (Boolean.TRUE.equals(m.ko) ? ("active".equals(m.role) ? "" : " · ") + "KO" : "");
-        if (!tags.isEmpty()) {
-            TextView t = text(tags, 10, Boolean.TRUE.equals(m.ko) ? BAD : WARN, true);
-            oneLine(t);
-            who.addView(t);
-        }
-        r.addView(who, new LinearLayout.LayoutParams(0, -2, 0.9f));
-        r.addView(vital("HP", m.hp, m.hpInvalid, HP), new LinearLayout.LayoutParams(0, -2, 1.1f));
-        r.addView(vital("MP", m.mp, m.mpInvalid, MP), new LinearLayout.LayoutParams(0, -2, 1f));
+        top.addView(n, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView hp = text(m.hp != null ? num(m.hp.cur) + " / " + num(m.hp.max) : m.hpInvalid ? "HP invalid" : "HP —", 16,
+                m.hp != null ? TEXT : DIM, false);
+        oneLine(hp);
+        top.addView(hp);
+        r.addView(top);
+        LinearLayout low = new LinearLayout(this);                // HP bar, then MP on the same line
+        low.setGravity(Gravity.CENTER_VERTICAL);
+        View hb = bar(m.hp, ko ? DIM : toneColor(Party.tone(m.hp), HP));
+        hb.setLayoutParams(new LinearLayout.LayoutParams(0, dp(6), 1));
+        low.addView(hb);
+        TextView mp = text(m.mp != null ? "MP " + num(m.mp.cur) + "/" + num(m.mp.max) : m.mpInvalid ? "MP invalid" : "MP —", 13,
+                m.mp != null ? MP : DIM, false);
+        oneLine(mp);
+        mp.setPadding(dp(8), 0, 0, 0);
+        mp.setGravity(Gravity.END);
+        mp.setMinWidth(dp(92));                                  // same bar length on every row
+        low.addView(mp);
+        r.addView(low);
         return r;
     }
 
-    View vital(String label, Party.Vital val, boolean invalid, int color) {
-        LinearLayout box = new LinearLayout(this);
-        box.setOrientation(LinearLayout.VERTICAL);
-        box.setPadding(dp(8), 0, 0, 0);
-        String value = val != null ? val.cur + "/" + val.max : invalid ? "invalid" : "—";
-        TextView t = text(label + " " + value, 12, val != null ? TEXT : DIM, false);
-        oneLine(t);
-        box.addView(t);
-
+    /** A thin bar for a vital; an empty bar stays visible on the darker track. */
+    View bar(Party.Vital val, int color) {
         LinearLayout bar = new LinearLayout(this);
-        bar.setBackground(round(BG, 3));  // darker than the member card, so an empty bar stays visible
+        bar.setBackground(round(BG, 3));
         if (val != null && val.cur > 0) {
             View fill = new View(this);
             fill.setBackground(round(color, 3));
             bar.addView(fill, new LinearLayout.LayoutParams(0, -1, val.cur));
         }
         if (val != null && val.max > val.cur) bar.addView(new View(this), new LinearLayout.LayoutParams(0, -1, val.max - val.cur));
-        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(5));
-        lp.topMargin = dp(2);
-        box.addView(bar, lp);
-        return box;
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, dp(6));
+        lp.topMargin = dp(3);
+        bar.setLayoutParams(lp);
+        return bar;
     }
+
+    static int toneColor(int tone, int fine) {
+        switch (tone) {
+            case 1: return WARN;
+            case 2: case 3: return BAD;
+            default: return fine;
+        }
+    }
+
+    static String num(long v) { return String.format(java.util.Locale.US, "%,d", v); }
 
     /** 0.13.0: the leader's target first, at most two enemies; live and verified data only, like the party. */
     void showTarget(ReceiverState.View v) {
@@ -1153,6 +1195,10 @@ public class MainActivity extends Activity {
         }
     }
 
+    /** Element chip colours, in the game's element order (Target.ELEMENTS). */
+    static final int[] ELEMENT_COLORS = { 0xFFE0654A, 0xFFE8C547, 0xFF7FD3E8, 0xFFB08A5A, 0xFF5B95E6, 0xFF62C27E,
+            0xFFF2ECDA, 0xFFA98BE0 };
+
     View enemyRow(Target.Enemy e) {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.VERTICAL);
@@ -1161,26 +1207,53 @@ public class MainActivity extends Activity {
         Reference.Entry entry = Target.entry(e, this::loadReference);
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        TextView n = text(entry != null ? entry.name : "Enemy", 14, TEXT, true);
+        TextView n = text(entry != null ? entry.name : "Enemy", 16, TEXT, true);
         oneLine(n);
         head.addView(n, new LinearLayout.LayoutParams(0, -2, 1));
+        TextView lv = text("Lv " + e.level, 13, DIM, false);
+        head.addView(lv);
+        r.addView(head);
+        Party.Vital hpv = new Party.Vital(e.hp, e.maxHp);
+        LinearLayout hpLine = new LinearLayout(this);
+        hpLine.setGravity(Gravity.CENTER_VERTICAL);
+        hpLine.addView(text("HP", 13, DIM, false), new LinearLayout.LayoutParams(0, -2, 1));
+        TextView hpn = text(num(e.hp) + " / " + num(e.maxHp), 15, e.hp > 0 ? TEXT : DIM, false);
+        oneLine(hpn);
+        hpLine.addView(hpn);
+        r.addView(hpLine);
+        r.addView(bar(hpv, e.hp > 0 ? toneColor(Party.tone(hpv), Theme.GOLD) : DIM));
+        // Affinities as chips that wrap like words; the words stay (colour alone never carries the meaning).
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        float density = getResources().getDisplayMetrics().density;
+        for (Target.Group g : Target.groups(e)) {
+            if (sb.length() > 0) sb.append("\n");
+            sb.append(g.label).append("  ");
+            for (int i = 0; i < Target.ELEMENTS.length; i++) {
+                if ((g.mask & (1 << i)) == 0) continue;
+                int s0 = sb.length();
+                sb.append(Target.ELEMENTS[i]);
+                ChipSpan.Style st = g.kind == Target.Group.Kind.ABSORB ? ChipSpan.Style.OUTLINE
+                        : g.kind == Target.Group.Kind.IMMUNE ? ChipSpan.Style.STRUCK : ChipSpan.Style.FILL;
+                sb.setSpan(new ChipSpan(ELEMENT_COLORS[i], BG, st, density), s0, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.append(" ");
+            }
+        }
+        TextView a = text("", 14, TEXT, false);
+        a.setText(sb.length() > 0 ? sb : "No elemental weaknesses");
+        if (sb.length() == 0) a.setTextColor(DIM);
+        a.setLineSpacing(dp(4), 1f);
+        a.setPadding(0, dp(5), 0, 0);
+        r.addView(a);
         StringBuilder by = new StringBuilder();
         for (int m : e.targetedBy) {
             if (m < 0 || m >= Gambits.MEMBERS.length) continue;
-            by.append(by.length() > 0 ? ", " : "").append(Gambits.MEMBERS[m]);
+            by.append(by.length() > 0 ? " · " : "").append(Gambits.MEMBERS[m]);
         }
-        TextView meta = text("Lv " + e.level + (by.length() > 0 ? " · " + by : ""), 11, DIM, false);
-        oneLine(meta);
-        head.addView(meta);
-        r.addView(head);
-        r.addView(vital("HP", new Party.Vital(e.hp, e.maxHp), false, BAD));
-        List<String> aff = Target.affinities(e);
-        TextView a = text(aff.isEmpty() ? "No elemental weaknesses" : String.join(" · ", aff), 12,
-                aff.isEmpty() ? DIM : TEXT, false);
-        a.setMaxLines(2);
-        a.setEllipsize(TextUtils.TruncateAt.END);
-        a.setPadding(0, dp(3), 0, 0);
-        r.addView(a);
+        if (by.length() > 0) {
+            TextView who = text(by.toString(), 13, DIM, false);
+            who.setPadding(0, dp(3), 0, 0);
+            r.addView(who);
+        }
         if (entry != null) r.setOnClickListener(x -> openBestiary(entry));
         return r;
     }
@@ -1213,8 +1286,13 @@ public class MainActivity extends Activity {
             return;
         }
         Map<String, Object> m = v.location.map();
-        locationName.setText(Place.name(Json.lng(m, "mapId")));                     // 0.23.1: "Loading…", not "Map -1"
-        String from = Place.from(Json.lng(m, "mapId"), Json.lng(m, "previousMapId"));
+        Long mapId = Json.lng(m, "mapId");
+        // 0.16.0: never a raw map number: names come with the game data; a stale location says it's the last known one.
+        boolean noNames = !Place.hasNames() && mapId != null && mapId >= 0 && !Place.title(mapId);
+        locationName.setText(noNames ? "Area names need the game data" : Place.name(mapId));
+        String from = noNames ? "" : Place.from(mapId, Json.lng(m, "previousMapId"));
+        if (v.locationFamily.state == ReceiverState.FamilyState.STALE && !Place.loading(mapId))
+            from = from.isEmpty() ? "Last known" : "Last known \u00b7 " + from;
         String battle = v.location.synthetic || Place.loading(Json.lng(m, "mapId")) ? null : battleLine(Json.obj(v.location.data, "battle"));
         String line = from + (battle != null ? (from.isEmpty() ? "" : "   ") + battle : "");
         location.setText(line);
@@ -1243,7 +1321,9 @@ public class MainActivity extends Activity {
             bigMap.set(null, null, null, MASK_SAMPLE);
             bigMap.setMarker(null, null, false);
             if (mapPage.getVisibility() == View.VISIBLE) openMap(false);
-            mapNote.setText("No map for this area.");
+            Long hid = v.location != null ? Json.lng(v.location.map(), "mapId") : null;
+            mapNote.setText(Place.loading(hid) ? "Loading\u2026" : Place.title(hid) ? "Title screen"
+                    : atlas == null ? "The map comes with the game data." : "No map for this area.");
             mapNote.setVisibility(View.VISIBLE);
             return;
         }

@@ -18,6 +18,15 @@ final class Party {
         Vital(long cur, long max) { this.cur = cur; this.max = max; }
     }
 
+    /** 0.16.0: how worried a bar should look: 0 fine, 1 below half, 2 below a quarter, 3 at zero. */
+    static int tone(Vital v) {
+        if (v == null || v.max <= 0) return 0;
+        if (v.cur <= 0) return 3;
+        if (v.cur * 4 < v.max) return 2;
+        if (v.cur * 2 < v.max) return 1;
+        return 0;
+    }
+
     static final class Member {
         int slot;
         String name;      // as reported by the producer (modded text); null = unknown

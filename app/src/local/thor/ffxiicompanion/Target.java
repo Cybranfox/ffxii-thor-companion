@@ -94,6 +94,30 @@ final class Target {
     }
 
     /** One line per affinity the enemy has, e.g. "Weak to Fire, Ice"; empty list when it has none. */
+    /** 0.16.0: one affinity line for the card's chips: what it means, and which element bits. */
+    static final class Group {
+        enum Kind { WEAK, ABSORB, IMMUNE, HALF }
+        final Kind kind;
+        final String label;
+        final int mask;
+
+        Group(Kind kind, String label, int mask) {
+            this.kind = kind;
+            this.label = label;
+            this.mask = mask;
+        }
+    }
+
+    /** Weak first (what the player acts on), then absorb, immune, half; empty kinds left out. */
+    static List<Group> groups(Enemy e) {
+        List<Group> out = new ArrayList<>();
+        if (e.weak != 0) out.add(new Group(Group.Kind.WEAK, "Weak to", e.weak));
+        if (e.absorb != 0) out.add(new Group(Group.Kind.ABSORB, "Absorbs", e.absorb));
+        if (e.immune != 0) out.add(new Group(Group.Kind.IMMUNE, "Immune to", e.immune));
+        if (e.half != 0) out.add(new Group(Group.Kind.HALF, "Halves", e.half));
+        return out;
+    }
+
     static List<String> affinities(Enemy e) {
         List<String> out = new ArrayList<>();
         if (e.weak != 0) out.add("Weak to " + elements(e.weak));

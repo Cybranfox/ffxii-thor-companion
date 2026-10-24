@@ -1,12 +1,7 @@
 package local.thor.ffxiicompanion;
 
 import android.content.Context;
-import android.graphics.Typeface;
-import android.text.SpannableStringBuilder;
-import android.text.Spanned;
 import android.text.TextUtils;
-import android.text.style.ForegroundColorSpan;
-import android.text.style.StyleSpan;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -37,7 +32,8 @@ final class ReferenceView extends LinearLayout {
     private final LinearLayout chips;
     private final ListView list;
     private final ScrollView detail;
-    private final TextView detailTitle, detailBody, label;
+    private final TextView detailTitle, detailSub, label;
+    private final LinearLayout detailBox;   // 0.16.0: headings, chance tables and prose as separate views
     private Source source;
     private String filter;
     private List<Reference.Entry> shown = new ArrayList<>();
@@ -76,9 +72,13 @@ final class ReferenceView extends LinearLayout {
         d.addView(back);
         detailTitle = tv("", 18, text, true);
         d.addView(detailTitle);
-        detailBody = tv("", 13, text, false);
-        detailBody.setPadding(0, dp(6), 0, 0);
-        d.addView(detailBody);
+        detailSub = tv("", 13, dim, false);
+        detailSub.setPadding(0, dp(2), 0, 0);
+        d.addView(detailSub);
+        detailBox = new LinearLayout(c);
+        detailBox.setOrientation(VERTICAL);
+        detailBox.setPadding(0, dp(4), 0, 0);
+        d.addView(detailBox);
         detail.addView(d);
         detail.setVisibility(GONE);
         addView(detail, new LayoutParams(-1, 0, 1));
@@ -129,25 +129,44 @@ final class ReferenceView extends LinearLayout {
     /** Shows one entry's detail page (also used by the Targeting card, 0.13.0). */
     void open(Reference.Entry e) {
         detailTitle.setText(e.name);
-        SpannableStringBuilder b = new SpannableStringBuilder();
         String sub = source.subtitle(e);
-        if (sub != null && !sub.isEmpty()) {
-            int s = b.length();
-            b.append(sub).append("\n\n");
-            b.setSpan(new ForegroundColorSpan(dim), s, b.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
-        for (String line : e.lines) {
-            int s = b.length();
-            if (line.startsWith("## ")) {
-                b.append(line.substring(3));
-                b.setSpan(new StyleSpan(Typeface.BOLD), s, b.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                b.setSpan(new ForegroundColorSpan(accent), s, b.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            } else {
-                b.append(line);
+        detailSub.setText(sub == null ? "" : sub);
+        detailSub.setVisibility(sub == null || sub.isEmpty() ? GONE : VISIBLE);
+        detailBox.removeAllViews();
+        // 0.16.0: "[40%]   Earth Crystal" rows as a table (item left, chance right), "## " lines as headings; any
+        // other line stays as written, so pages that don't follow the pattern still read as before.
+        for (PageTable.Block bl : PageTable.parse(e.lines)) {
+            switch (bl.kind) {
+                case HEADING: {
+                    TextView h = tv(bl.text, 14, accent, true);
+                    h.setPadding(0, dp(10), 0, dp(2));
+                    detailBox.addView(h);
+                    break;
+                }
+                case ROW: {
+                    LinearLayout row = new LinearLayout(getContext());
+                    row.setPadding(dp(6), dp(3), dp(6), dp(3));
+                    row.setBackground(round(card, 4));
+                    TextView item = tv(bl.text, 14, text, false);
+                    row.addView(item, new LayoutParams(0, -2, 1));
+                    TextView pct = tv(bl.chance, 14, Theme.GOLD, true);
+                    pct.setGravity(Gravity.END);
+                    row.addView(pct, new LayoutParams(dp(64), -2));
+                    LayoutParams lp = new LayoutParams(-1, -2);
+                    lp.topMargin = dp(2);
+                    detailBox.addView(row, lp);
+                    break;
+                }
+                case BLANK: {
+                    detailBox.addView(new View(getContext()), new LayoutParams(-1, dp(8)));
+                    break;
+                }
+                default: {
+                    TextView t = tv(bl.text, 14, text, false);
+                    detailBox.addView(t);
+                }
             }
-            b.append('\n');
         }
-        detailBody.setText(b);
         list.setVisibility(GONE);
         detail.setVisibility(VISIBLE);
         detail.scrollTo(0, 0);

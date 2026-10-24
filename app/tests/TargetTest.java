@@ -57,6 +57,15 @@ public final class TargetTest {
         check(Target.entry(unkeyed, () -> { loads[0]++; return r; }) == null && loads[0] == 1,
                 "no key: unnamed, and the pack isn't read for it");
         check(Target.entry(named, () -> null) == null, "pack not readable (being replaced): unnamed, no crash");
-        System.out.println("PASS TargetTest 13 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
+        // 0.16.0: chip groups (weak first) and bar tones.
+        List<Target.Group> g = Target.groups(e);
+        check(g.size() == 3 && g.get(0).kind == Target.Group.Kind.WEAK && g.get(0).mask == 5
+                && g.get(1).kind == Target.Group.Kind.ABSORB && g.get(2).kind == Target.Group.Kind.IMMUNE && g.get(2).mask == 64,
+                "affinity groups: weak, absorb, immune, empty kinds left out");
+        check(Target.groups(new Target.Enemy()).isEmpty(), "no affinities -> no groups");
+        check(Party.tone(new Party.Vital(60, 100)) == 0 && Party.tone(new Party.Vital(49, 100)) == 1
+                && Party.tone(new Party.Vital(24, 100)) == 2 && Party.tone(new Party.Vital(0, 100)) == 3
+                && Party.tone(null) == 0 && Party.tone(new Party.Vital(5, 0)) == 0, "bar tones: fine, below half, below a quarter, zero");
+        System.out.println("PASS TargetTest 16 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
     }
 }

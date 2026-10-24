@@ -41,6 +41,9 @@ final class Place {
 
     static boolean loading(Long id) { return id != null && id < 0; }
 
+    /** 0.16.0: area names are loaded (from the game data); without them a map id isn't something to show a player. */
+    static boolean hasNames() { return !names.isEmpty(); }
+
     /** 0.10.0: map 12 is what the game reports on its title and load screens (seen on the Thor); it has no area name. */
     static boolean title(Long id) { return id != null && id == 12 && !names.containsKey(12); }
 
