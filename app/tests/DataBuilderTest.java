@@ -205,6 +205,8 @@ public class DataBuilderTest {
                 + archive + ")");
         List<DataBuilder.Output> outs = DataBuilder.build(in, (String) pyInfo.get("builder"));
         long ms = (System.nanoTime() - t0) / 1000000L;
+        check(new java.util.TreeSet<>(in.readPaths()).equals(new java.util.TreeSet<>(Recipe.entries(in.index()))),
+                "the copy recipe (" + Recipe.entries(in.index()).size() + " entries) is exactly what the build reads");
 
         Map<String, byte[]> java = new TreeMap<>();
         for (DataBuilder.Output o : outs)

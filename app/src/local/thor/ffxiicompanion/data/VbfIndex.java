@@ -11,8 +11,9 @@ public final class VbfIndex {
     public static final class Entry {
         public final String name;
         public final long size, offset, storedSize;
+        public final int ordinal;            // its row in the directory (what the game script's raw copy asks for)
         private final int[] codes;
-        Entry(String n,long s,long o,int[] c,long physical) { name=n;size=s;offset=o;codes=c;storedSize=physical; }
+        Entry(String n,int i,long s,long o,int[] c,long physical) { name=n;ordinal=i;size=s;offset=o;codes=c;storedSize=physical; }
         public int[] blockCodes() { return codes.clone(); }
     }
     private final Map<String,Entry> entries;
@@ -56,7 +57,7 @@ public final class VbfIndex {
             for(int j=0;j<codes.length;j++) { int c=Short.toUnsignedInt(b.getShort(blocksStart+2*(int)(first+j)));codes[j]=c;stored+=c==0?65536:c; }
             require(length==0 || (offset>=end && offset<=archiveSize && stored<=archiveSize-offset),"archive span");
             require(!result.containsKey(name),"duplicate name");
-            result.put(name,new Entry(name,length,offset,codes,stored));
+            result.put(name,new Entry(name,i,length,offset,codes,stored));
         }
         return new VbfIndex(result,archiveSize);
     }

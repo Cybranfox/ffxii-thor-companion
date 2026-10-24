@@ -26,14 +26,16 @@ BATTLE_FLAGS = 0x22C1F48
 CONFIG = 'scripts/config/TheInsurgentsDescriptiveInventoryConfig/us.lua'
 
 
-def make_archive(path, rng_seed=5):
+def make_archive(path, rng_seed=5, names=('a/first.bin', 'b/second.bin', 'c/third.bin')):
     """SRYK: 'SRYK', u32 header_len, u64 n; n x 16 hash; n x 32 {u32 first, u32 0, u64 size, u64 off, u64 name_off};
-    u32 names_len (incl. itself) + names; u16 block codes (0 = raw 64 KiB, == logical size = raw, else zlib); data."""
+    u32 names_len (incl. itself) + names; u16 block codes (0 = raw 64 KiB, == logical size = raw, else zlib); data.
+    names: the three entries' paths (test_rawcopy_app uses the app's recipe paths); the contents are synthetic."""
     import random
     rnd = random.Random(rng_seed)
-    files = [('a/first.bin', bytes(rnd.getrandbits(8) for _ in range(70000))),          # 2 blocks, zlib + raw tail
-             ('b/second.bin', bytes(range(256)) * 300),                                   # 76800 B, compresses
-             ('c/third.bin', bytes(rnd.getrandbits(8) for _ in range(65536 * 2)))]       # 2 x 64 KiB raw (code 0)
+    files = [(names[0], bytes(rnd.getrandbits(8) for _ in range(70000))),               # 2 blocks, zlib + raw tail
+             (names[1], bytes(range(256)) * 300),                                         # 76800 B, compresses
+             (names[2], bytes(rnd.getrandbits(8) for _ in range(65536 * 2)))]            # 2 x 64 KiB raw (code 0)
+    files += [(n, bytes([i]) * 1000) for i, n in enumerate(names[3:])]                    # extras: one zlib block each
     names = b''
     name_offs = []
     for n, _ in files:

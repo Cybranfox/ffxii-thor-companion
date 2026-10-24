@@ -6,8 +6,10 @@ import java.io.ByteArrayOutputStream;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Where the data builder's game files come from: the archive's own index (its SRYK header), each entry's stored
@@ -55,6 +57,9 @@ public abstract class Inputs implements AtlasStep.Source {
         if (h == null) throw new IOException("source not read: " + path);
         return h;
     }
+
+    /** Every entry this build has read (the copy recipe must cover exactly these). */
+    public Set<String> readPaths() { return Collections.unmodifiableSet(hashes.keySet()); }
 
     public Collection<String> names() { return index().names(); }
 
