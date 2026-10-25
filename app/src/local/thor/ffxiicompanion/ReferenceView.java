@@ -67,8 +67,9 @@ final class ReferenceView extends LinearLayout {
         addView(hs);
 
         list = new ListView(c);
-        list.setDivider(new android.graphics.drawable.ColorDrawable(paper ? 0x40302F2B : Theme.RULE));   // 0.17.0: hairlines
-        list.setDividerHeight(dp(1));
+        list.setDivider(null);                                // 0.17.0: one rule above the list, none between entries
+        list.setDividerHeight(0);
+        list.setBackground(paper ? null : Theme.section(dp(1)));
         list.setOnItemClickListener((parent, v, pos, id) -> open(shown.get(pos)));
         LayoutParams lp = new LayoutParams(-1, 0, 1);
         lp.topMargin = dp(6);
@@ -126,7 +127,7 @@ final class ReferenceView extends LinearLayout {
         for (int i = 0; i < chips.getChildCount(); i++) {
             TextView t = (TextView) chips.getChildAt(i);
             boolean on = f == null ? t.getTag() == null : f.equals(t.getTag());
-            t.setBackground(on ? round(Theme.MARK, 0) : (paper ? null : round(card, 12)));
+            t.setBackground(on ? round(Theme.MARK, 0) : null);   // 0.17.0: filters as plain words
             t.setTextColor(text);
             t.setPadding(on ? dp(14) : dp(10), dp(4), dp(10), dp(4));
         }
@@ -195,23 +196,28 @@ final class ReferenceView extends LinearLayout {
             LinearLayout row = convert instanceof LinearLayout ? (LinearLayout) convert : newRow();
             Reference.Entry e = shown.get(i);
             ((TextView) row.getChildAt(0)).setText(e.name);
-            ((TextView) row.getChildAt(1)).setText(source.subtitle(e));
+            ((TextView) row.getChildAt(1)).setText(source.subtitle(e));   // a quiet right-hand column, as the game's lists
             return row;
         }
     }
 
     private LinearLayout newRow() {
+        // 0.17.0: one line per entry as the game's lists: the name, then the details small and dim on the right; a
+        // full 48 dp touch row. The whole entry opens on tap, as before.
         LinearLayout r = new LinearLayout(getContext());
-        r.setOrientation(VERTICAL);
-        r.setPadding(dp(8), dp(6), dp(8), dp(6));
-        TextView n = tv("", 15, text, true);
+        r.setGravity(Gravity.CENTER_VERTICAL);
+        r.setMinimumHeight(dp(48));
+        r.setPadding(dp(8), 0, dp(8), 0);
+        TextView n = tv("", 15, text, false);
         n.setSingleLine(true);
         n.setEllipsize(TextUtils.TruncateAt.END);
-        r.addView(n);
+        r.addView(n, new LayoutParams(0, -2, 1));
         TextView s = tv("", 12, dim, false);
         s.setSingleLine(true);
         s.setEllipsize(TextUtils.TruncateAt.END);
-        r.addView(s);
+        s.setGravity(Gravity.END);
+        s.setPadding(dp(10), 0, 0, 0);
+        r.addView(s, new LayoutParams(0, -2, 1.3f));
         return r;
     }
 

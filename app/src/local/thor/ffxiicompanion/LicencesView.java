@@ -52,7 +52,7 @@ final class LicencesView extends LinearLayout {
         addView(board, new LayoutParams(-1, 0, 1));
         detail = ui.text("Tap a license.", 13, MainActivity.TEXT, false);
         detail.setPadding(ui.dp(10), ui.dp(6), ui.dp(10), ui.dp(8));
-        detail.setBackground(ui.round(MainActivity.CARD, 8));
+        detail.setBackground(Theme.section(ui.dp(1)));          // 0.17.0: a ruled footer line, no box
         detail.setMaxLines(4);
         detail.setEllipsize(TextUtils.TruncateAt.END);
         LayoutParams lp = new LayoutParams(-1, -2);
