@@ -153,6 +153,8 @@ final class Regions {
         final List<Exit> exits = new ArrayList<>();
         final java.util.Set<Exit> dimmed = new java.util.HashSet<>();   // labels of locked exits (0.13.0)
         final List<Shown> symbols = new ArrayList<>();
+        final List<Shown> targets = new ArrayList<>();       // 0.17.0: a hunt map's markers (group 9), drawn ringed
+        boolean targetExplored;                              // the hunt view's map has explored ground
         String region;          // region file name, or null when unknown
         String note;            // why neighbours are missing, or null
         int neighbours;
@@ -353,6 +355,85 @@ final class Regions {
             v.neighbours++;
             shownMaps.add(sh.mapId);
         }
+        decorate(v, reg, shownMaps, s, atlas);
+        return v;
+    }
+
+    /**
+     * 0.17.0: the region of a hunt's map, as the game's hunt map shows it: that map is the focus (framed even when you
+     * haven't explored it, but only explored ground is drawn), the region's other explored areas around it, and the
+     * game's hunt marker (NAVIICN2 group 9, rows `markers`) only once that map has explored ground. The saved table is
+     * used only when the current area's atlas slot matches the game's, as in build(); the area you're in uses `current`.
+     */
+    View buildHunt(Reveal.Decision current, int mapId, List<Integer> markers, Snapshot s, Atlas atlas) {
+        View v = new View();
+        List<Atlas.Sheet> sheets = atlas.sheets(mapId);
+        if (sheets.size() != 1 || sheets.get(0).sheetsForMap > 1) { v.note = "This hunt's map isn't in your map data."; return v; }
+        Atlas.Sheet target = sheets.get(0);
+        Region reg = regionOf(target.file);
+        if (reg == null) { v.note = "This hunt's map isn't in your map data."; return v; }
+        boolean full = current != null && current.mode == Reveal.Mode.FULL;
+        Map<Integer, byte[]> table = full ? null : table(s);
+        if (!full) {
+            Long liveSlot = Json.lng(Json.obj(s.data, "reveal"), "slot");
+            Integer slot = current != null && current.sheet != null ? atlas.slot(current.sheet) : null;
+            if (table == null || liveSlot == null || slot == null || liveSlot.intValue() != slot) {
+                v.note = "Needs the live map from the game.";
+                return v;
+            }
+        }
+        v.region = reg.name;
+        List<Integer> shownMaps = new ArrayList<>();
+        for (Placed p : reg.sheets) {
+            Atlas.Sheet sh = atlas.sheet(p.file);
+            if (sh == null || sh.sheetsForMap > 1 || !Reveal.screenVerifiedWidth(sh.width)
+                    || sh.stride != Reveal.strideFor(sh.width)) continue;
+            boolean isTarget = sh.file.equals(target.file);
+            boolean isCurrent = current != null && current.sheet != null && sh.file.equals(current.sheet.file);
+            int cols = sh.width / Reveal.TILE, rows = sh.height / Reveal.TILE;
+            if (rows * sh.stride > Reveal.RECORD_BYTES) continue;
+            Part part = new Part();
+            part.sheet = sh;
+            part.x = p.x;
+            part.y = p.y;
+            part.focus = isTarget;
+            if (isCurrent) {
+                part.visible = current.visible;
+                part.revealed = current.show;
+            } else {
+                Integer slot = full ? null : atlas.slot(sh);
+                byte[] rec = full || slot == null ? null : table.get(slot);
+                part.visible = new boolean[rows][cols];
+                part.revealed = new boolean[rows][cols];
+                for (int y = 0; y < rows; y++) {
+                    for (int x = 0; x < cols; x++) {
+                        boolean show = full || (rec != null && Reveal.cell(rec, x, y, cols, rows, sh.stride));
+                        part.revealed[y][x] = show;
+                        part.visible[y][x] = show && sh.drawn(x, y);
+                    }
+                }
+            }
+            boolean any = false;
+            for (boolean[] row : part.visible) for (boolean c : row) any |= c;
+            if (isTarget) v.targetExplored = any;
+            else if (!any) continue;
+            else v.neighbours++;
+            v.parts.add(isTarget ? 0 : v.parts.size(), part);
+            if (any) shownMaps.add(sh.mapId);
+        }
+        if (v.parts.isEmpty() || !v.parts.get(0).focus) { v.parts.clear(); v.note = "This hunt's map isn't in your map data."; return v; }
+        decorate(v, reg, shownMaps, s, atlas);
+        if (v.targetExplored) {
+            Part t = v.parts.get(0);
+            for (Icon i : reg.icons)
+                if (i.mapId == mapId && i.group == 9 && markers.contains(i.index))
+                    v.targets.add(new Shown(i.type, t.x + i.dx, t.y + i.dy, t.x + i.dx, t.y + i.dy));
+        }
+        return v;
+    }
+
+    /** Links, exit labels and symbols for the drawn areas (shared by build and buildHunt). */
+    private void decorate(View v, Region reg, List<Integer> shownMaps, Snapshot s, Atlas atlas) {
         // A link from an area to itself is the line out to one of its exits (all 99 in the game end at an exit point).
         for (Link l : reg.links) if (shownMaps.contains(l.a) && shownMaps.contains(l.b)) v.links.add(l);
         for (Exit e : reg.exits) {
@@ -373,7 +454,6 @@ final class Regions {
                 }
             }
         }
-        return v;
     }
 
     /** The area whose exit line ends within 30 units of (x, y), when no other exit line ends even half as close. */

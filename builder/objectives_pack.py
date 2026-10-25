@@ -10,6 +10,10 @@ Hunts: quest/menuquest.dat ('qstd') lists the menu's quests (u32 title ID, u32 g
   hunts, detail rows in menuquest01.bin in menu order (0x37EE92). Each detail row: three narrative offsets (the third,
   split on 0x03, is the journal paragraph per phase; 0x578450) and a 28-byte phase table (bank at header +0xA):
   phase = nibble (raw // 5) of the table, raw = the live stage byte (0x37EF70). Titles from questtitle.bin ('st2e').
+Hunt maps (0.17.0; HuntMap_Native_2026-10-25.md): detail row +6 is a QHD0 helper relative to bank +6 (0x37FEA0).
+  QHD0 = tag, u32 1, u32 record offset; record = u8 count, u8 kind, then 18-byte entries {u8 selector (kind 0: the
+  region), u8 marker index, u16 map ID, 7-byte map mask, 7-byte marker mask}. The game shows the first entry whose map
+  mask has bit min(stage // 5, 50) (0x37EB90); its marker is NAVIICN2 group 9, row `marker index`, on that map (0x403BC0).
 Text: the game's encoding (gambit_names.decode); bytes it doesn't cover are read from the user's own font00.dat, where
   glyph (byte - 0x20) holds the character as UTF-8 (all 68 known bytes agree). 0x0F 0x20 0x81 xx is formatting and is
   dropped, 0x02 is a line break. A text with any byte still unknown is left out rather than shown garbled.
@@ -148,6 +152,30 @@ def st2e_sparse(d):
     return out
 
 
+def map_hints(detail, at):
+    """The hunt map helper at `at` in menuquest01.bin: {'kind', 'entries'} (0x473BB0), or None when absent."""
+    if at + 12 > len(detail) or detail[at:at + 4] != b'QHD0':
+        raise ValueError('hunt map helper')
+    n, rel = _u('<II', detail, at + 4)
+    if n != 1 or rel < 12:
+        raise ValueError('hunt map directory')
+    r = at + rel
+    count, kind = _u('<BB', detail, r)
+    if count > 64 or kind > 1 or r + 2 + 18 * count > len(detail):
+        raise ValueError('hunt map entries')
+    entries = []
+    for j in range(count):
+        e = r + 2 + 18 * j
+        selector, marker, map_id = _u('<BBH', detail, e)
+        row = {'showMask': detail[e + 4:e + 11].hex(), 'markerMask': detail[e + 11:e + 18].hex()}
+        if kind == 0:
+            row['regionId'] = selector                  # a region, not a point
+        else:
+            row.update(mapId=map_id, markerIndex=marker)
+        entries.append(row)
+    return {'kind': kind, 'entries': entries}
+
+
 def hunts(menu, detail, titles, chars):
     if not 12 <= len(menu) <= MAX_BYTES or menu[:4] != b'qstd':
         raise ValueError('not a qstd file')
@@ -176,9 +204,11 @@ def hunts(menu, detail, titles, chars):
             if not 16 + 20 * rows <= s < len(detail) or stop < 0:
                 raise ValueError('hunt narrative')
             paragraphs = [text(p, chars) for p in detail[s:stop].split(b'\x03')]
+        helper = _u('<H', detail, 16 + 20 * ordinal + 6)[0]
+        hints = map_hints(detail, banks[3] + helper) if banks[3] != 0xFFFF and helper != 0xFFFF else None
         out.append({'questId': quest, 'title': text(titles.get(title_id, b''), chars),
                     'phases': detail[banks[5] + 28 * ordinal:banks[5] + 28 * (ordinal + 1)].hex(),
-                    'paragraphs': paragraphs})
+                    'paragraphs': paragraphs, 'mapHints': hints})
         ordinal += 1
     return out
 

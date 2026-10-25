@@ -71,6 +71,26 @@ public final class ObjectivesTest {
         check(o.journal(obj("{\"contract\":\"ffxii.quests.v1\",\"status\":\"unstable\"}")).isEmpty() && o.journal(null).isEmpty(),
                 "no valid live state, no list");
         check(Objectives.parse(obj("{\"format\":\"other\"}")) == null, "other files refused");
-        System.out.println("PASS ObjectivesTest 12 checks (hint: last eligible row, gates, signed scenario; hunt journal)");
+        // 0.17.0 hunt maps: quest 128's two entries (HuntMap_Native_2026-10-25.md): the town at raw 0-29 and 50-255,
+        // its field map at 30-49 (k = min(stage / 5, 50) on the 7-byte masks)
+        Objectives m = Objectives.parse(obj("{\"format\":\"ffxii-companion-objectives-1\",\"hunts\":[{\"questId\":128,\"phases\":\""
+                + hex(new byte[28]) + "\",\"paragraphs\":[],\"mapHints\":{\"kind\":1,\"entries\":["
+                + "{\"showMask\":\"3ffcffffffff07\",\"markerMask\":\"3ffcffffffff07\",\"mapId\":291,\"markerIndex\":3},"
+                + "{\"showMask\":\"c0030000000000\",\"markerMask\":\"c0030000000000\",\"mapId\":227,\"markerIndex\":1}]}},"
+                + "{\"questId\":153,\"phases\":\"" + hex(new byte[28]) + "\",\"paragraphs\":[],\"mapHints\":{\"kind\":0,\"entries\":["
+                + "{\"showMask\":\"ffffffffffffff\",\"markerMask\":\"00000000000000\",\"regionId\":1}]}},"
+                + "{\"questId\":140,\"phases\":\"" + hex(new byte[28]) + "\",\"paragraphs\":[],\"mapHints\":{\"kind\":1,\"entries\":["
+                + "{\"showMask\":\"zz\",\"markerMask\":\"00\",\"mapId\":1,\"markerIndex\":0}]}}]}"));
+        Objectives.Hunt h128 = m.hunts.get(0);
+        int[] at = {0, 29, 30, 49, 50, 255}, want = {291, 291, 227, 227, 291, 291};
+        boolean all = true;
+        for (int i = 0; i < at.length; i++) {
+            Objectives.HuntMap hm = Objectives.mapFor(h128, at[i]);
+            all &= hm != null && hm.mapId == want[i] && hm.markers.size() == 1 && hm.markers.get(0) == (want[i] == 291 ? 3 : 1);
+        }
+        check(all, "hunt map follows the stage: town, field map, town; its marker row");
+        check(m.hunts.get(1).mapKind == 0 && Objectives.mapFor(m.hunts.get(1), 40) == null, "region-only hunt: no single map");
+        check(m.hunts.get(2).mapKind == -1 && Objectives.mapFor(m.hunts.get(2), 40) == null, "malformed helper: no map, hunt kept");
+        System.out.println("PASS ObjectivesTest 15 checks (hint: last eligible row, gates, signed scenario; hunt journal; hunt maps)");
     }
 }

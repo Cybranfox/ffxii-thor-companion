@@ -132,6 +132,8 @@ public class MainActivity extends Activity {
     final boolean fixtureMode = false;
     ReceiverState state;
     ReceiverState.View lastView;
+    Integer huntQuest;               // 0.17.0: the full map shows this hunt's map instead of where you are
+    static final String MAP_HELP = "Pinch to zoom, drag to move. Double-tap: this area / the whole region.";
     final AutoClosePolicy autoClose = new AutoClosePolicy();
     boolean installSynced;
     /** 0.16.0: the process's one writer of the pack and the copy job (outlives this activity). */
@@ -534,7 +536,7 @@ public class MainActivity extends Activity {
         head.addView(mapTitle, new LinearLayout.LayoutParams(0, -2, 1));
         mapRecentre = pageButton("Re-centre");
         mapRecentre.setVisibility(View.GONE);
-        mapRecentre.setOnClickListener(x -> bigMap.recentre());
+        mapRecentre.setOnClickListener(x -> { if (huntQuest != null) bigMap.focusArea(); else bigMap.recentre(); });
         head.addView(mapRecentre);
         TextView close = pageButton("Close");
         close.setOnClickListener(x -> openMap(false));
@@ -573,7 +575,7 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, 0, 1);
         blp.topMargin = dp(4);
         mapPage.addView(bigMap, blp);
-        mapPageNote = text("Pinch to zoom, drag to move. Double-tap: this area / the whole region.", 11, Theme.INK_DIM, false);
+        mapPageNote = text(MAP_HELP, 11, Theme.INK_DIM, false);
         mapPageNote.setShadowLayer(0, 0, 0, 0);
         mapPageNote.setBackgroundColor(0xFFC6B28D);
         oneLine(mapPageNote);
@@ -639,6 +641,19 @@ public class MainActivity extends Activity {
                 p.setEllipsize(TextUtils.TruncateAt.END);
                 r.addView(p);
             }
+            // 0.17.0: tap for the map the game's own hunt map shows at this stage (HuntMap_Native_2026-10-25.md)
+            if (Objectives.mapFor(e.hunt, e.stage) != null) {
+                TextView go = text("\u25b8 Hunt map", 12, TEXT, false);
+                go.setPadding(0, dp(3), 0, 0);
+                r.addView(go);
+                r.setMinimumHeight(dp(48));
+                final int q = e.hunt.questId;
+                r.setOnClickListener(x -> openHuntMap(q));
+            } else if (e.hunt.mapKind == 0) {
+                TextView n2 = text("Its map covers several regions: see the game's Clan Primer.", 11, DIM, false);
+                n2.setPadding(0, dp(3), 0, 0);
+                r.addView(n2);
+            }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = dp(4);
             huntsRows.addView(r, lp);
@@ -652,9 +667,35 @@ public class MainActivity extends Activity {
         return t;
     }
 
+    /** 0.17.0: the full map on a hunt's map (live, accepted hunts only, as the journal), framed on that map. */
+    void openHuntMap(int questId) {
+        if (tab != 0 || lastView == null) return;
+        huntQuest = questId;
+        openMap(true);
+        showMap(lastView);
+        if (huntQuest != null) bigMap.focusArea();
+    }
+
+    /** The journal entry for the hunt on the full map, or null when it's no longer listed or live. */
+    Objectives.Entry huntEntry(ReceiverState.View v) {
+        if (huntQuest == null || v == null) return null;
+        Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
+        boolean ok = s != null && v.locationFamily.state == ReceiverState.FamilyState.LIVE
+                && (s.synthetic ? fixtureMode : Reveal.buildVerified(s.hello()));
+        Objectives o = ok && data.packReadable() ? objectives.get() : null;
+        if (o == null) return null;
+        for (Objectives.Entry e : o.journal(Json.obj(s.data, "quests"))) if (e.hunt.questId == huntQuest) return e;
+        return null;
+    }
+
     /** Shows the full map in place of the Status page, or goes back to it. */
     void openMap(boolean open) {
         if (open && tab != 0) return;
+        if (!open && huntQuest != null) {                  // back from a hunt's map: the full map is yours again
+            huntQuest = null;
+            mapPageNote.setText(MAP_HELP);
+            if (lastView != null) showMap(lastView);
+        }
         mapPage.setVisibility(open ? View.VISIBLE : View.GONE);
         liveScroll.setVisibility(open || tab != 0 ? View.GONE : View.VISIBLE);
         if (open) bigMap.recentre();
@@ -711,6 +752,7 @@ public class MainActivity extends Activity {
         tab = i;
         styleTabs();
         mapPage.setVisibility(View.GONE);
+        huntQuest = null;
         liveScroll.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
         gearView.setVisibility(View.GONE);
         bestiaryView.setVisibility(View.GONE);
@@ -1639,13 +1681,44 @@ public class MainActivity extends Activity {
         setChip(mapChip, v.locationFamily);
         mapView.setVisibility(View.VISIBLE);
         mapView.set(rv, drawable, masks, MASK_SAMPLE);
-        bigMap.set(rv, drawable, masks, MASK_SAMPLE);
         Position.Marker mk = Position.locate(v.location, d.sheet, fixtureMode);
         boolean live = v.locationFamily.state == ReceiverState.FamilyState.LIVE;
         mapView.setMarker(mk.reason == null ? mk.px : null, mk.reason == null ? mk.py : null, live);
+        if (huntQuest != null && showHuntMap(v, d, mk, live)) {
+            mapNote.setText("");
+            mapNote.setVisibility(View.GONE);
+            return;
+        }
+        bigMap.set(rv, drawable, masks, MASK_SAMPLE);
         bigMap.setMarker(mk.reason == null ? mk.px : null, mk.reason == null ? mk.py : null, live);
         mapNote.setText("");                                   // 0.22.0: the map speaks for itself
         mapNote.setVisibility(View.GONE);
+    }
+
+    /**
+     * 0.17.0: the full map on the open hunt's map. False (and back to your own map) when the hunt is no longer listed
+     * or has no map at this stage. Your marker shows only when you're on that map.
+     */
+    boolean showHuntMap(ReceiverState.View v, Reveal.Decision d, Position.Marker mk, boolean live) {
+        Objectives.Entry e = huntEntry(v);
+        Objectives.HuntMap hm = e != null ? Objectives.mapFor(e.hunt, e.stage) : null;
+        Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
+        if (hm == null || regions == null || atlas == null || s == null) {
+            huntQuest = null;
+            mapPageNote.setText(MAP_HELP);
+            return false;
+        }
+        Regions.View hv = regions.buildHunt(d, hm.mapId, hm.markers, s, atlas);
+        List<Regions.Part> drawable = new java.util.ArrayList<>();
+        for (Regions.Part p : hv.parts) if (p.focus || mask(p.sheet) != null) drawable.add(p);
+        bigMap.set(hv, drawable, masks, MASK_SAMPLE);
+        boolean here = d.sheet != null && d.sheet.mapId == hm.mapId && mk.reason == null;
+        bigMap.setMarker(here ? mk.px : null, here ? mk.py : null, live);
+        String title = e.hunt.title != null ? e.hunt.title : "Hunt " + e.hunt.questId;
+        mapPageNote.setText(hv.note != null ? title + ": " + hv.note
+                : !hv.targetExplored ? title + ": this hunt points to a map you haven't explored yet."
+                : title + ": where the game's hunt map points (not where the mark is).");
+        return true;
     }
 
     static String join(String... parts) {

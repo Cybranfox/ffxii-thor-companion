@@ -13,7 +13,9 @@ import java.util.Map;
  * - Hunts: listed when either of the quest menu's banks has the quest's bit (0x37EAA0); phase = nibble (stage / 5) of
  *   the hunt's 28-byte table (0x37EF70); the journal shows paragraph phase - 1. The companion lists only hunts at
  *   phase 2 or later, which the game's own text says is "accepted" for all 45 hunts.
- * There is no numeric location for either in the game's files, so neither becomes a map pin.
+ * - Hunt maps (0.17.0, HuntMap_Native_2026-10-25.md): each hunt's QHD0 helper lists maps; the game shows the first
+ *   entry whose map mask has bit min(stage / 5, 50) (0x37EB90) and marks the NAVIICN2 group-9 rows of that map whose
+ *   marker mask has the bit too (0x3BDCD0). That is where the game's own hunt map points, not where the mark spawns.
  */
 final class Objectives {
     static final String FORMAT = "ffxii-companion-objectives-1";
@@ -27,6 +29,21 @@ final class Objectives {
         String title;
         byte[] phases;               // 28 bytes
         List<String> paragraphs;     // null entries: text the builder couldn't decode
+        int mapKind = -1;            // 1: maps with markers, 0: whole regions; -1: none in this data pack
+        final List<MapEntry> map = new ArrayList<>();
+    }
+
+    /** One QHD0 entry: a map (kind 1) or a region (kind 0), and the stage bits that show it and its marker. */
+    static final class MapEntry {
+        int mapId, markerIndex, regionId;
+        byte[] show, marker;         // 7 bytes each
+    }
+
+    /** What the game's hunt map shows for a hunt now: a map and its marker rows (group 9). */
+    static final class HuntMap {
+        final int mapId;
+        final List<Integer> markers;
+        HuntMap(int mapId, List<Integer> markers) { this.mapId = mapId; this.markers = markers; }
     }
 
     /** A hunt as the journal shows it now. */
@@ -34,7 +51,10 @@ final class Objectives {
         final Hunt hunt;
         final int phase;
         final String paragraph;      // null when the game has none for this phase or it didn't decode
-        Entry(Hunt hunt, int phase, String paragraph) { this.hunt = hunt; this.phase = phase; this.paragraph = paragraph; }
+        final int stage;             // the raw stage byte
+        Entry(Hunt hunt, int phase, String paragraph, int stage) {
+            this.hunt = hunt; this.phase = phase; this.paragraph = paragraph; this.stage = stage;
+        }
     }
 
     final List<Hint> hints = new ArrayList<>();
@@ -71,6 +91,7 @@ final class Objectives {
             h.paragraphs = new ArrayList<>();
             List<Object> ps = Json.arr(q, "paragraphs");
             if (ps != null) for (Object p : ps) h.paragraphs.add(p instanceof String && ((String) p).length() <= 2000 ? (String) p : null);
+            parseMap(h, Json.obj(q, "mapHints"));
             r.hunts.add(h);
         }
         List<Object> th = Json.arr(o, "thresholds");
@@ -88,6 +109,41 @@ final class Objectives {
             }
         }
         return r;
+    }
+
+    /** The hunt's map helper; anything malformed leaves the hunt without one (its journal entry still shows). */
+    private static void parseMap(Hunt h, Map<String, Object> m) {
+        Long kind = m != null ? Json.lng(m, "kind") : null;
+        List<Object> es = m != null ? Json.arr(m, "entries") : null;
+        if (kind == null || (kind != 0 && kind != 1) || es == null || es.size() > 64) return;
+        List<MapEntry> out = new ArrayList<>();
+        for (Object o : es) {
+            MapEntry e = new MapEntry();
+            e.show = hex(Json.str(o, "showMask"));
+            e.marker = hex(Json.str(o, "markerMask"));
+            if (e.show == null || e.marker == null || e.show.length != 7 || e.marker.length != 7) return;
+            Long a = Json.lng(o, kind == 1 ? "mapId" : "regionId"), b = kind == 1 ? Json.lng(o, "markerIndex") : Long.valueOf(0);
+            if (a == null || b == null || a < 0 || a > 0xFFFF || b < 0 || b > 255) return;
+            if (kind == 1) { e.mapId = a.intValue(); e.markerIndex = b.intValue(); } else e.regionId = a.intValue();
+            out.add(e);
+        }
+        h.mapKind = kind.intValue();
+        h.map.addAll(out);
+    }
+
+    private static boolean bit(byte[] mask, int k) { return (mask[k >> 3] >> (k & 7) & 1) != 0; }
+
+    /** The map the game's hunt map shows at this raw stage, with its marker rows; null when none or region-only. */
+    static HuntMap mapFor(Hunt h, int stage) {
+        if (h == null || h.mapKind != 1 || stage < 0 || stage > 255) return null;
+        int k = Math.min(stage / 5, 50);
+        MapEntry chosen = null;
+        for (MapEntry e : h.map) if (bit(e.show, k)) { chosen = e; break; }
+        if (chosen == null) return null;
+        List<Integer> markers = new ArrayList<>();
+        for (MapEntry e : h.map)
+            if (e.mapId == chosen.mapId && bit(e.show, k) && bit(e.marker, k) && !markers.contains(e.markerIndex)) markers.add(e.markerIndex);
+        return new HuntMap(chosen.mapId, markers);
     }
 
     /** The game's current map hint (0x3BD950), or null without live flags or when no row applies. */
@@ -123,7 +179,7 @@ final class Objectives {
             int p = phase(h.phases, stages[q - first.intValue()] & 0xFF);
             if (p < 2) continue;
             String para = p - 1 < h.paragraphs.size() ? h.paragraphs.get(p - 1) : null;
-            out.add(new Entry(h, p, para));
+            out.add(new Entry(h, p, para, stages[q - first.intValue()] & 0xFF));
         }
         return out;
     }

@@ -140,10 +140,26 @@ public final class ObjectivesStep {
         extent(d,a,(long)z-a);char[] out=new char[(z-a)*2];String h="0123456789abcdef";
         for(int i=a;i<z;i++){out[2*(i-a)]=h.charAt((d[i]>>>4)&15);out[2*(i-a)+1]=h.charAt(d[i]&15);}return new String(out);
     }
+    /** 0.17.0: a hunt's map helper (QHD0, 0x473BB0): {kind, entries}; same keys and order as objectives_pack.py. */
+    static Map<String,Object> mapHints(byte[] d,int at) {
+        if(at<0 || at+12>d.length || d[at]!='Q' || d[at+1]!='H' || d[at+2]!='D' || d[at+3]!='0')throw bad("hunt map helper");
+        long n=u32(d,at+4),rel=u32(d,at+8);if(n!=1 || rel<12)throw bad("hunt map directory");
+        int r=index(at+rel),count=u8(d,r),kind=u8(d,r+1);
+        if(count>64 || kind>1 || (long)r+2+18L*count>d.length)throw bad("hunt map entries");
+        List<Object> entries=new ArrayList<>();
+        for(int j=0;j<count;j++) {
+            int e=r+2+18*j;
+            LinkedHashMap<String,Object> row=obj("showMask",hex(d,e+4,e+11),"markerMask",hex(d,e+11,e+18));
+            if(kind==0)row.put("regionId",u8(d,e));
+            else {row.put("mapId",u16(d,e+2));row.put("markerIndex",u8(d,e+1));}
+            entries.add(row);
+        }
+        return obj("kind",kind,"entries",entries);
+    }
     static List<Object> hunts(byte[] menu,byte[] detail,Map<Long,byte[]> titles,Map<Integer,String> chars) {
         file(menu,12,MAX,"qstd");int groups=u16(menu,8),count=u16(menu,10);
         if(groups<1 || groups>16 || count>256 || menu.length!=12+8*count)throw bad("qstd rows");
-        file(detail,16,MAX,null);int rows=u16(detail,14),bank2=u16(detail,4),bank5=u16(detail,10);
+        file(detail,16,MAX,null);int rows=u16(detail,14),bank2=u16(detail,4),bank3=u16(detail,6),bank5=u16(detail,10);
         if(rows>256 || 16+20*rows>detail.length || bank5+28*rows>detail.length)throw bad("detail rows");
         List<Object> out=new ArrayList<>();int ordinal=0;long used=0;
         for(int i=0;i<count;i++) {
@@ -155,8 +171,10 @@ public final class ObjectivesStep {
                 int end=nul(detail,s,detail.length),p=s;used=budget(used,end-s);
                 for(int j=s;j<=end;j++) if(j==end || detail[j]==3) {paragraphs.add(text(slice(detail,p,j),chars));p=j+1;}
             }
+            int helper=u16(detail,16+20*ordinal+6);
+            Map<String,Object> hints=bank3!=65535 && helper!=65535?mapHints(detail,bank3+helper):null;
             out.add(obj("questId",quest,"title",text(titles.getOrDefault(title,new byte[0]),chars),
-                "phases",hex(detail,bank5+28*ordinal,bank5+28*(ordinal+1)),"paragraphs",paragraphs));
+                "phases",hex(detail,bank5+28*ordinal,bank5+28*(ordinal+1)),"paragraphs",paragraphs,"mapHints",hints));
             ordinal++;
         }
         return out;

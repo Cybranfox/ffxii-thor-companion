@@ -39,7 +39,19 @@ def main():
     except ValueError:
         pass
     ok += 1
-    print(f'{ok}/3 PASS. Objectives builder: font rule for extra punctuation, unknown text left out, hint table order')
+    # hunt map helper (QHD0): header, then a record {count, kind} and 18-byte entries
+    entry = struct.pack('<BBH', 16, 3, 291) + bytes.fromhex('3ffcffffffff07') * 2
+    qhd = b'QHD0' + struct.pack('<II', 1, 12) + struct.pack('<BB', 1, 1) + entry
+    assert O.map_hints(b'xx' + qhd, 2) == {'kind': 1, 'entries': [{'showMask': '3ffcffffffff07', 'markerMask': '3ffcffffffff07',
+                                                                    'mapId': 291, 'markerIndex': 3}]}
+    for bad in (qhd[:-1], b'QHDX' + qhd[4:], qhd[:4] + struct.pack('<II', 2, 12) + qhd[12:]):
+        try:
+            O.map_hints(bad, 0)
+            raise AssertionError('accepted a malformed hunt map helper')
+        except ValueError:
+            pass
+    ok += 1
+    print(f'{ok}/4 PASS. Objectives builder: font rule for extra punctuation, unknown text left out, hint table order, hunt maps')
 
 
 if __name__ == '__main__':

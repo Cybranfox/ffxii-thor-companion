@@ -66,6 +66,9 @@ final class RevealMapView extends View {
     private final Paint label = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint labelHalo = new Paint(Paint.ANTI_ALIAS_FLAG);
     private Float markerPx, markerPy;
+    private List<Regions.Shown> targets = new ArrayList<>();
+    private final Paint targetRing = new Paint(Paint.ANTI_ALIAS_FLAG);
+    { targetRing.setStyle(Paint.Style.STROKE); targetRing.setColor(0xFFC8962E); }
     private boolean markerLive;
     private final Map<Regions.Part, Bitmap> fog = new java.util.IdentityHashMap<>();   // 0.16.0: soft edges per part
     private final Map<String, Object[]> fogCache = new java.util.HashMap<>();           // sheet -> {cells, bitmap or null}
@@ -135,6 +138,13 @@ final class RevealMapView extends View {
     void setSymbolArt(Map<Integer, Bitmap> art) {
         symbolArt = art;
         invalidate();
+    }
+
+    /** 0.17.0: frame the focus area (a hunt's map), unzoomed. */
+    void focusArea() {
+        areaFit = true;
+        zoom = 1f; panX = 0; panY = 0;
+        changed();
     }
 
     /** Full map: back to the whole explored region, unzoomed. */
@@ -210,6 +220,7 @@ final class RevealMapView extends View {
         this.exits = v != null ? v.exits : new ArrayList<>();
         this.dimmed = v != null ? v.dimmed : new java.util.HashSet<>();
         this.shown = v != null ? v.symbols : new ArrayList<>();
+        this.targets = v != null ? v.targets : new ArrayList<>();
         this.masks = masks;
         this.sample = sample;
         fog.clear();
@@ -251,6 +262,17 @@ final class RevealMapView extends View {
         drawPart(canvas, focus, focusPaint, scale, ox, oy);
         drawSymbols(canvas, scale, ox, oy);
         float d = getResources().getDisplayMetrics().density;
+        for (Regions.Shown t : targets) {                       // 0.17.0: the hunt map's marker, ringed in gold
+            float cx = ox + t.x * scale, cy = oy + t.y * scale;
+            Bitmap bm = symbolArt != null ? symbolArt.get(t.type) : null;
+            if (bm != null) {
+                float h = symbolPx, w = h * bm.getWidth() / bm.getHeight();
+                dst.set(cx - w / 2, cy - h / 2, cx + w / 2, cy + h / 2);
+                canvas.drawBitmap(bm, null, dst, symbolPaint);
+            }
+            targetRing.setStrokeWidth(2.5f * d);
+            canvas.drawCircle(cx, cy, symbolPx * 0.75f + 4 * d, targetRing);
+        }
         if (markerPx != null && markerPy != null) {
             float cx = ox + (focus.x + markerPx * UNITS_PER_PX) * scale, cy = oy + (focus.y + markerPy * UNITS_PER_PX) * scale;
             float r = 6 * d;
@@ -267,7 +289,7 @@ final class RevealMapView extends View {
         if (m != masks || smp != sample || ps == null || v == null || ps.size() != parts.size()) return false;
         if (!java.util.Objects.equals(v.region, region) && interactive) return false;
         if (v.links.size() != links.size() || v.exits.size() != exits.size() || v.dimmed.size() != dimmed.size()
-                || v.symbols.size() != shown.size()) return false;
+                || v.symbols.size() != shown.size() || v.targets.size() != targets.size()) return false;
         for (int i = 0; i < ps.size(); i++) {
             Regions.Part a = ps.get(i), b = parts.get(i);
             if (a.focus != b.focus || a.x != b.x || a.y != b.y || a.sheet == null || b.sheet == null
