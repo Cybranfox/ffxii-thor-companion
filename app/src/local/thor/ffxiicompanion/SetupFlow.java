@@ -83,6 +83,9 @@ public final class SetupFlow {
     }
     static Step loaders(Map<String,Object> r,String refusal){
         if("unsupported_lua".equals(refusal))return s("loaders",State.MISSING,"loader_unsupported_lua",Action.REINSTALL_BOOTSTRAP,true);
+        // 0.16.1: the app started FFXII 90+ s ago and nothing at all came back (no receipt, no snapshot): the game runs but
+        // ffgriever's loaders don't, so neither does our script. Most often GameNative's "Enable mod loaders" is off.
+        if(yes(at(r,"evidence.launchedNoLoader"))&&!liveAccepted(r))return s("loaders",State.MISSING,"loader_not_loading",Action.SHOW_SETUP_STEPS,false);
         // A current inventory is positive evidence only. No receipt/snapshot does not mean a missing DLL.
         boolean current=yes(at(r,"evidence.loaderInventoryCurrent"))&&liveAccepted(r);
         if(current){
@@ -146,7 +149,9 @@ public final class SetupFlow {
         String build=str(at(r,"pack.buildStatus"));if(yes(at(r,"evidence.appBuildCurrent"))&&("building".equals(build)||"verifying".equals(build)))return s("data",State.MISSING,"build_processing",Action.WAIT_BUILD,durableMissing);
         boolean buildable=canBuild(r,script,loaders);
         if(yes(at(r,"evidence.buildRequested"))&&(durableMissing||no(at(r,"pack.validated"))))return liveAccepted(r)?s("data",State.MISSING,"build_starting",Action.WAIT_BUILD,durableMissing):s("data",State.MISSING,"build_waiting_for_game",Action.OPEN_GAME_NATIVE,durableMissing);
-        if(no(at(r,"pack.present")))return s("data",State.MISSING,"data_pack_missing",buildable?Action.START_BUILD:Action.OPEN_GAME_NATIVE,true);
+        // 0.16.1: before the game script runs, building can't start yet: say it comes next instead of a red "missing"
+        if(no(at(r,"pack.present")))return buildable?s("data",State.MISSING,"data_pack_missing",Action.START_BUILD,true)
+                :s("data",State.UNKNOWN,"data_wait_script",Action.OPEN_GAME_NATIVE,true);
         if(format!=null&&!v1&&!v2)return s("data",State.MISSING,"data_format_unsupported",Action.SHOW_SETUP_STEPS,true);
         if(no(at(r,"pack.validated"))||no(at(r,"pack.indexRegionsVersionMatch"))||(v2&&no(at(r,"pack.atlasReceiptMatches"))))return s("data",State.MISSING,"data_pack_invalid",buildable?Action.START_BUILD:Action.SHOW_SETUP_STEPS,true);
         if(valid&&!yes(at(r,"pack.generationMatches")))return s("data",State.UNKNOWN,"data_other_generation",Action.SHOW_SETUP_STEPS,false);

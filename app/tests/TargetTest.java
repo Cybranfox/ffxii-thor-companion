@@ -84,6 +84,27 @@ public final class TargetTest {
         check("Guest Thirteen".equals(Party.displayName(pt.members.get(1), () -> cr)), "guest 13 named from the pack");
         check("Member 14".equals(Party.displayName(pt.members.get(2), () -> cr)) && "Member 13".equals(Party.displayName(pt.members.get(1), () -> null)),
                 "no name in the pack, or no pack: Member N, never guessed");
-        System.out.println("PASS TargetTest 22 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
+        // 0.16.0: status chips from the member's status bits; names and bad/good from the pack, hidden bits left out
+        Reference sr = Reference.parse("{\"format\":\"ffxii-companion-reference-1\",\"kind\":\"REFERENCE\",\"bestiary\":[{\"entry\":1,"
+                + "\"name\":\"W\",\"pages\":[[\"x\"]]}],\"statusNames\":{\"0\":\"Down\",\"8\":\"Bad A\",\"18\":\"Good B\",\"19\":\"Good C\","
+                + "\"29\":\"Low\",\"31\":\"Gone\"},\"statusDisplay\":{\"0\":{\"adverse\":true},\"8\":{\"adverse\":true},"
+                + "\"18\":{\"adverse\":false},\"19\":{\"adverse\":false},\"29\":{\"adverse\":true},\"31\":{\"adverse\":true}}}");
+        long bits = (1L << 19) | (1L << 18) | (1L << 8) | 1L | (1L << 29) | (1L << 31) | (1L << 5);   // 5 has no name
+        List<Party.Chip> cs = Party.chips(bits, () -> sr);
+        check(cs.size() == 3 && cs.get(0).name.equals("Bad A") && cs.get(0).adverse && cs.get(1).name.equals("Good B")
+                && !cs.get(2).adverse, "chips: bad first, buffs after; KO/HP Critical/X-Zone hidden; unnamed bit left out");
+        int[] askedPack = {0};
+        check(Party.chips(null, () -> { askedPack[0]++; return sr; }).isEmpty()
+                && Party.chips((1L << 0) | (1L << 29), () -> { askedPack[0]++; return sr; }).isEmpty() && askedPack[0] == 0,
+                "no status, or only hidden bits: no chips and the pack isn't read");
+        check(Party.chips(1L << 8, () -> null).isEmpty(), "no pack: no chips, never guessed");
+        Party sp = Party.parse(obj("{\"members\":[{\"slot\":0,\"member\":0,\"name\":\"A\",\"status\":4294967295},"
+                + "{\"slot\":1,\"member\":1,\"name\":\"B\",\"status\":786432},{\"slot\":2,\"member\":2,\"name\":\"C\"},"
+                + "{\"slot\":3,\"member\":3,\"name\":\"D\",\"status\":1,\"ko\":false}]}"));
+        check(sp.members.get(0).status == 0xFFFFFFFFL && Boolean.TRUE.equals(sp.members.get(0).ko)
+                && sp.members.get(1).status == 786432L && Boolean.FALSE.equals(sp.members.get(1).ko)
+                && sp.members.get(2).status == null && sp.members.get(2).ko == null
+                && Boolean.FALSE.equals(sp.members.get(3).ko), "status parsed as unsigned; KO from bit 0 unless the script says");
+        System.out.println("PASS TargetTest 26 checks (grouping, leader first, affinity names, gates, bestiary join, on-demand pack)");
     }
 }

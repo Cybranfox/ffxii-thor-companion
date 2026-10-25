@@ -21,6 +21,27 @@ def digest(value):
         value = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(',', ':')).encode()
     return hashlib.sha256(value).hexdigest()
 
+def status_data(ss, text):
+    """Strict fixed tables; use each status row's name id, never its bit as a text id."""
+    def rows(section, count, stride):
+        data = ss[section]
+        if len(data) < 32:
+            raise ValueError('status/element header')
+        magic, n, size, offset = struct.unpack_from('<4I', data)
+        if magic != 0x65327473 or n != count or size != stride or offset != 32 or offset+n*size > len(data):
+            raise ValueError('status/element table')
+        return [data[offset+i*size:offset+(i+1)*size] for i in range(n)]
+    def name(row):
+        value = text(struct.unpack_from('<H', row)[0])
+        if not value or len(value) > 4096:
+            raise ValueError('status/element name missing or oversized')
+        return value
+    statuses = rows(15, 32, 40)
+    return ({str(i): name(row) for i, row in enumerate(statuses)},
+            {str(i): {'adverse': bool(struct.unpack_from('<H', row, 6)[0] & 0x2000)}
+             for i, row in enumerate(statuses)},
+            {str(i): name(row) for i, row in enumerate(rows(41, 8, 2))})
+
 def build(install=DEFAULT, lang='us'):
     if lang != 'us':
         raise ValueError('Only US text encoding is validated by this prototype')
@@ -95,6 +116,7 @@ def build(install=DEFAULT, lang='us'):
             # are named like the six.
             'characters': {str(i): n for i, n in ((i, text(struct.unpack_from('<H', row, 0x30)[0]))
                                                    for i, row in enumerate(records(16))) if n}}
+        ref['statusNames'], ref['statusDisplay'], ref['elementNames'] = status_data(ss, text)
         nodes = records(12)
         names = {str(i): text(struct.unpack_from('<H', row)[0]) for i,row in enumerate(nodes)}
         boards = []

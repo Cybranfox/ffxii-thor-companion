@@ -36,6 +36,7 @@ final class SetupInputs {
         Map<String, Object> rawcopy;
         int completedRevision;
         String bootstrap;                      // install/result.txt verdict: installed / installed_warning / failed / null
+        boolean launchedNoLoader;              // 0.16.1: the app started FFXII 90+ s ago and nothing has come back since
     }
 
     private SetupInputs() {}
@@ -63,6 +64,7 @@ final class SetupInputs {
                 "appBuildCurrent", o.building,
                 "loaderReceiptSeen", o.loaderStatus != null,       // none ever: the loader has never run (install.cmd)
                 "bootstrapResult", o.bootstrap,                     // what install.cmd last reported (result.txt)
+                "launchedNoLoader", o.launchedNoLoader,             // started from the app, no receipt/snapshot since
                 "buildRequested", o.jobId != null));               // a copy job waits for, or runs in, the game
         boolean valid = o.packPresent && o.packProblem == null;
         root.put("pack", !o.packChecked                 // not checked yet: no pack evidence at all (the step says so)

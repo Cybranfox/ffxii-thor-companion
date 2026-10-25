@@ -20,7 +20,7 @@ public final class DataBuilder {
      * BUILD_INFO's "builder" for packs this builder makes. Change it only when the output changes: the app then rebuilds
      * from the copied files it keeps (no copy, no game). PC-built packs say the PC builder's version instead.
      */
-    public static final String VERSION = "app-2";                // app-2 (0.16.0): reference.json gains character names
+    public static final String VERSION = "app-3";                // app-3: status names/classification and element names
 
     /**
      * The game's own menu labels (an st2e file, like menu_mapname). The licence screens look board j's title up by

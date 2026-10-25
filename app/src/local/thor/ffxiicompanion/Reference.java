@@ -51,6 +51,13 @@ final class Reference {
     /** 0.16.0: a party member's name by member ID from the user's game data (guests too), or null for older packs. */
     String characterName(int id) { return characters.get(id); }
 
+    private final Map<Integer,String> statusNames = new java.util.HashMap<>(), elementNames = new java.util.HashMap<>();
+    private final Map<Integer,Boolean> statusAdverse = new java.util.HashMap<>();
+    String statusName(int bit) { return statusNames.get(bit); }
+    /** Null means unknown (older pack or malformed entry), never assume beneficial. */
+    Boolean adverse(int bit) { return statusAdverse.get(bit); }
+    String elementName(int index) { return elementNames.get(index); }
+
     /** Gambit action name exactly as the game's menu shows it (data pack gambitActions), or null for older packs. */
     String actionName(int id) { return actions.get(id); }
 
@@ -159,6 +166,13 @@ final class Reference {
                 }
             }
         }
+        readNames(Json.obj(root,"statusNames"),r.statusNames,32);
+        readNames(Json.obj(root,"elementNames"),r.elementNames,8);
+        Map<String,Object> sd=Json.obj(root,"statusDisplay");
+        if(sd!=null)for(Map.Entry<String,Object> e:sd.entrySet())try {
+            int bit=Integer.parseInt(e.getKey());Object value=e.getValue() instanceof Map?((Map<?,?>)e.getValue()).get("adverse"):null;
+            if(bit>=0&&bit<32&&value instanceof Boolean)r.statusAdverse.put(bit,(Boolean)value);
+        }catch(NumberFormatException ignored) { }
         Map<String, Object> gc = Json.obj(root, "gambitConditions");
         if (gc != null) {
             for (Map.Entry<String, Object> e : gc.entrySet()) {
@@ -171,6 +185,14 @@ final class Reference {
             }
         }
         return r;
+    }
+
+    private static void readNames(Map<String,Object> values,Map<Integer,String> out,int limit) {
+        if(values==null)return;
+        for(Map.Entry<String,Object> e:values.entrySet())try {
+            int id=Integer.parseInt(e.getKey());
+            if(id>=0&&id<limit&&e.getValue() instanceof String&&!((String)e.getValue()).isEmpty())out.put(id,(String)e.getValue());
+        }catch(NumberFormatException ignored) { }
     }
 
     private static List<String> strings(List<Object> in) {

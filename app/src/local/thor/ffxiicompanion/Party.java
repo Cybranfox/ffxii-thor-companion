@@ -38,6 +38,37 @@ final class Party {
         return n != null ? n : m.name;
     }
 
+    /** Status bits never shown as chips: KO (the row says it), HP Critical (the bar shows it), X-Zone (internal). */
+    static final int HIDDEN_STATUS = (1 << 0) | (1 << 29) | (1 << 31);
+
+    static final class Chip {
+        final int bit;
+        final String name;
+        final boolean adverse;
+        Chip(int bit, String name, boolean adverse) { this.bit = bit; this.name = name; this.adverse = adverse; }
+    }
+
+    /**
+     * 0.16.0: a member's status chips, bad effects first, both in the game's bit order. Names and the bad/good split
+     * come from the user's game data (reference.json statusNames/statusDisplay); a bit without both is left out, never
+     * guessed. No status data (older script or pack): no chips.
+     */
+    static List<Chip> chips(Long status, java.util.function.Supplier<Reference> ref) {
+        List<Chip> bad = new ArrayList<>(), good = new ArrayList<>();
+        if (status == null || (status & ~(long) HIDDEN_STATUS & 0xFFFFFFFFL) == 0) return bad;
+        Reference r = ref.get();
+        if (r == null) return bad;
+        for (int bit = 0; bit < 32; bit++) {
+            if ((status & (1L << bit)) == 0 || (HIDDEN_STATUS & (1 << bit)) != 0) continue;
+            String name = r.statusName(bit);
+            Boolean adverse = r.adverse(bit);
+            if (name == null || adverse == null) continue;
+            (adverse ? bad : good).add(new Chip(bit, name, adverse));
+        }
+        bad.addAll(good);
+        return bad;
+    }
+
     static final class Member {
         int slot;
         String name;      // as reported by the producer (modded text); null = unknown
@@ -48,6 +79,7 @@ final class Party {
         Vital hp, mp;     // null = unavailable or invalid
         boolean hpInvalid, mpInvalid;
         Boolean ko;       // null = unknown; only an explicit flag sets KO
+        Long status;      // 0.16.0: the game's status bits (u32[M+0x3C] | u32[M+0x64]); null = older script (unknown)
     }
 
     final List<Member> members;
@@ -81,6 +113,9 @@ final class Party {
             m.role = role != null ? role : "active";
             m.leader = Boolean.TRUE.equals(Json.bool(o, "leader"));
             m.ko = Json.bool(o, "ko");
+            Long st = Json.lng(o, "status");
+            m.status = st != null && st >= 0 && st <= 0xFFFFFFFFL ? st : null;
+            if (m.ko == null && m.status != null) m.ko = (m.status & 1) != 0;   // bit 0 is the game's own KO
             Object hp = ((Map<?, ?>) o).get("hp"), mp = ((Map<?, ?>) o).get("mp");
             m.hp = vital(hp);
             m.hpInvalid = hp != null && m.hp == null;

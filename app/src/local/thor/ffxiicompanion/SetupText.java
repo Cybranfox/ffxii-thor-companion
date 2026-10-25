@@ -33,6 +33,10 @@ final class SetupText {
         LINES.put("install_wait_storage", "Needs file access first.");
 
         LINES.put("loaders_reported_ready", "The game reports a supported LUA Script Loader and External File Loader.");
+        LINES.put("loader_not_loading", "FFXII started, but its mod loaders didn't run, so the companion's script couldn't start. "
+                + "In GameNative: FINAL FANTASY XII \u203a \u2699 \u203a Edit container \u203a General \u203a turn on Enable mod loaders, save, "
+                + "and start the game again. Still stuck? A:\\x64 needs dinput8.dll and the modules folder (ffgriever's loaders), "
+                + "and the C++ runtime (see the install guide).");
         LINES.put("loaders_not_observed", "Start FFXII in GameNative so the companion can check the game setup.");
         LINES.put("loaders_wait_install", "Needs the setup files first.");
         LINES.put("loader_not_seen", "First time? Run install.cmd once in the game's GameNative container (Options › Open container › D: › FFXII_companion › install), then start FFXII.");
@@ -67,6 +71,7 @@ final class SetupText {
 
         LINES.put("data_ready", "Game data ready.");
         LINES.put("data_ready_legacy", "Game data ready (older format; a rebuild adds the newest map checks).");
+        LINES.put("data_wait_script", "Comes next, once the game script is running.");
         LINES.put("data_pack_missing", "No game data yet: build it from your game (about 5 minutes of play).");
         LINES.put("data_pack_invalid", "Some game data files are missing or don't match. Rebuild them.");
         LINES.put("data_format_unsupported", "This game data is in a format this app doesn't read. Rebuild it.");

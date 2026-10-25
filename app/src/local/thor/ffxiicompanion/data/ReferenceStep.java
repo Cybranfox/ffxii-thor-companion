@@ -115,13 +115,33 @@ public final class ReferenceStep {
         byte[][] items=pack.records(18);for(int i=0;i<items.length;i++){String name=pack.text(u16(items[i],8));if(name!=null&&!name.isEmpty())byId.put(i,obj("id",i,"name",name,"category","items","tags",new ArrayList<>(),"lines",new ArrayList<>()));}
         LinkedHashMap<String,Object> sources=obj("vanillaBattlePack",source(PACK,bytes));List<Object> best=new ArrayList<>(),tips=new ArrayList<>();
         for(String path:new String[]{GEAR,BEST,TIPS}){byte[] raw=inputs.config(path);if(raw==null)continue;if(path.equals(GEAR)){for(Object value:gear(raw)){Map<?,?> row=(Map<?,?>)value;byId.put((Integer)row.get("id"),value);}}else if(path.equals(BEST))best=fctr(raw,true);else tips=fctr(raw,false);sources.put(path.equals(GEAR)?"gear":path.equals(BEST)?"bestiary":"tips",source(path,raw));}
-        return obj("format","ffxii-companion-reference-1","kind","REFERENCE","language","us","note","Built by the FFXII Thor Companion data builder from your own game files. Personal use only.","sources",sources,"gear",new ArrayList<>(byId.values()),"bestiary",best,"tips",tips,"gambitConditions",conditions(pack),"gambitActions",gambits,"characters",characters(pack));
+        return obj("format","ffxii-companion-reference-1","kind","REFERENCE","language","us","note","Built by the FFXII Thor Companion data builder from your own game files. Personal use only.","sources",sources,"gear",new ArrayList<>(byId.values()),"bestiary",best,"tips",tips,"gambitConditions",conditions(pack),"gambitActions",gambits,"characters",characters(pack),"statusNames",statusNames(pack),"statusDisplay",statusDisplay(pack),"elementNames",elementNames(pack));
     }
     /** 0.16.0: character names by member ID (section 16 record [ID] +0x30 -> text; 0x536310), guests included. */
     static LinkedHashMap<String,Object> characters(BattlePack pack)throws IOException {
         byte[][] rows=pack.records(16);LinkedHashMap<String,Object> out=new LinkedHashMap<>();
         for(int i=0;i<rows.length;i++){String name=pack.text(u16(rows[i],0x30));if(name!=null&&!name.isEmpty())out.put(Integer.toString(i),name);}
         return out;
+    }
+    /** Section 15: 32 x 0x28; section 41: 8 x 2, both from data +0x20. */
+    static byte[][] fixedRows(BattlePack pack,int section,int count,int stride)throws IOException {
+        byte[] raw=pack.section(section);
+        if(raw.length<32||BattlePack.u32(raw,12)!=32)throw new IOException("status/element offset");
+        byte[][] rows=pack.records(section);
+        if(rows.length!=count)throw new IOException("status/element count");
+        for(byte[] row:rows)if(row.length!=stride)throw new IOException("status/element stride");
+        return rows;
+    }
+    static LinkedHashMap<String,Object> tableNames(BattlePack pack,int section,int count,int stride)throws IOException {
+        byte[][] rows=fixedRows(pack,section,count,stride);LinkedHashMap<String,Object> out=new LinkedHashMap<>();
+        for(int i=0;i<rows.length;i++){String name=pack.text(u16(rows[i],0));if(name==null||name.isEmpty()||name.length()>4096)throw new IOException("status/element name missing or oversized");out.put(Integer.toString(i),name);}
+        return out;
+    }
+    static LinkedHashMap<String,Object> statusNames(BattlePack pack)throws IOException{return tableNames(pack,15,32,40);}
+    static LinkedHashMap<String,Object> elementNames(BattlePack pack)throws IOException{return tableNames(pack,41,8,2);}
+    static LinkedHashMap<String,Object> statusDisplay(BattlePack pack)throws IOException {
+        byte[][] rows=fixedRows(pack,15,32,40);LinkedHashMap<String,Object> out=new LinkedHashMap<>();
+        for(int i=0;i<rows.length;i++)out.put(Integer.toString(i),obj("adverse",(u16(rows[i],6)&0x2000)!=0));return out;
     }
     /** Metadata for BUILD_INFO composition; no second input read required. */
     public static LinkedHashMap<String,Object> metadata(Map<String,Object> reference) {

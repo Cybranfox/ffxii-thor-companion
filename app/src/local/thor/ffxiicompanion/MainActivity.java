@@ -729,6 +729,13 @@ public class MainActivity extends Activity {
         o.loaderStatus = o.storageGranted ? DataFiles.jsonObject(new File(dir, "loader_status.json"), LoaderStatus.MAX_BYTES) : null;
         if (o.storageGranted && o.loaderStatus == null)                          // only matters before the first game start
             o.bootstrap = SetupInputs.bootstrap(DataFiles.readText(new File(INSTALL_DIR, "result.txt"), 4096));
+        // 0.16.1: started from here 90 s to 30 min ago, and neither a loader receipt nor a snapshot is newer than that
+        if (launchedAt > 0) {
+            long since = System.currentTimeMillis() - launchedAt, newest = new File(dir, "loader_status.json").lastModified();
+            for (String s : SLOTS) newest = Math.max(newest, new File(dir, s).lastModified());
+            if (newest >= launchedAt || since > 30 * 60_000L) launchedAt = 0;   // the game reported in (or it's old news)
+            else o.launchedNoLoader = since >= 90_000L;
+        }
         Snapshot cur = v != null ? v.current : null;
         o.transport = v != null ? v.transport.name() : "NO_DATA";
         o.accepted = cur != null && !cur.synthetic;
@@ -793,6 +800,7 @@ public class MainActivity extends Activity {
                 case OPEN_GAME_NATIVE: {
                     try {                                                    // straight into FFXII, as Cocoon does
                         startActivity(startGame(), top);
+                        launchedAt = System.currentTimeMillis();             // 0.16.1: to notice the loaders not running
                     } catch (RuntimeException e) {                           // older GameNative: its library instead
                         Intent i = getPackageManager().getLaunchIntentForPackage("app.gamenative");
                         startActivity(i != null ? i.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK) : web(INSTALL_URL), top);
@@ -1151,7 +1159,7 @@ public class MainActivity extends Activity {
             int[] j = jobs(jobsFrom, m.member);
             key.append('|').append(m.slot).append(',').append(m.member).append(',').append(m.name).append(',').append(m.role)
                     .append(',').append(m.leader).append(',').append(m.ko).append(',').append(vitalKey(m.hp)).append(',')
-                    .append(vitalKey(m.mp)).append(',').append(m.hpInvalid).append(m.mpInvalid)
+                    .append(vitalKey(m.mp)).append(',').append(m.hpInvalid).append(m.mpInvalid).append(',').append(m.status)
                     .append(',').append(j != null ? j[0] + "/" + j[1] : "-");
         }
         if (key.toString().equals(partyKey)) return;
@@ -1159,12 +1167,13 @@ public class MainActivity extends Activity {
         partyRow.removeAllViews();
         for (Party.Member m : v.party.members) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
-            lp.topMargin = dp(4);
+            lp.topMargin = dp(3);
             partyRow.addView(memberRow(m, stale, jobs(jobsFrom, m.member)), lp);
         }
     }
 
     String partyKey;                                              // what the Party rows currently show
+    long launchedAt;                                              // when Start FFXII was tapped (wall clock), 0 = not
     ZodiacBackground sky;
 
     void clearPartyRows() {
@@ -1205,7 +1214,7 @@ public class MainActivity extends Activity {
     View memberRow(Party.Member m, boolean stale, int[] jobs) {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.VERTICAL);
-        r.setPadding(dp(8), dp(3), dp(8), dp(4));
+        r.setPadding(dp(8), dp(2), dp(8), dp(3));
         r.setBackground(round(TRACK, 6));
         r.setAlpha(stale ? 0.55f : 1f);
         boolean ko = m.ko != null ? m.ko : Party.tone(m.hp) == 3;   // the game script's flag wins; HP 0 only without it
@@ -1214,18 +1223,19 @@ public class MainActivity extends Activity {
         top.setGravity(Gravity.CENTER_VERTICAL);
         String tags = ("active".equals(m.role) ? "" : " · " + m.role.toUpperCase()) + (ko ? " · KO" : "");
         String name = Party.displayName(m, this::loadReference);
-        TextView n = text((m.leader ? "★ " : "") + (name != null ? name : "Unknown") + tags, 16, ko ? DIM : TEXT, true);
+        TextView n = text((m.leader ? "★ " : "") + (name != null ? name : "Unknown") + tags, 15, ko ? DIM : TEXT, true);
         oneLine(n);
         top.addView(n, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView hp = text(m.hp != null ? num(m.hp.cur) + " / " + num(m.hp.max) : m.hpInvalid ? "HP invalid" : "HP —", 16,
+        TextView hp = text(m.hp != null ? num(m.hp.cur) + " / " + num(m.hp.max) : m.hpInvalid ? "HP invalid" : "HP —", 15,
                 m.hp != null ? TEXT : DIM, false);
         oneLine(hp);
         top.addView(hp);
         r.addView(top);
-        LinearLayout low = new LinearLayout(this);                // HP bar, then MP on the same line
+        // 0.16.0, compact so four rows fit: job icons, HP bar and MP on one line, then the status chips (small, full width,
+        // only when there are any).
+        LinearLayout low = new LinearLayout(this);
         low.setGravity(Gravity.CENTER_VERTICAL);
-        // 0.16.0: job icons at the start of the bar line (the name keeps its full width). The six main members always
-        // get both slots, empty until the build data is in, so the bar never jumps when it comes and goes.
+        // Job icons first. The six main members always get both slots, empty until the build data is in, so nothing jumps.
         boolean main = m.member != null && m.member >= 0 && m.member < 6;
         for (int k = 0; main && k < 2; k++) {
             int j = jobs != null ? jobs[k] : -1;
@@ -1243,14 +1253,32 @@ public class MainActivity extends Activity {
         View hb = bar(m.hp, ko ? DIM : toneColor(Party.tone(m.hp), HP));
         hb.setLayoutParams(new LinearLayout.LayoutParams(0, dp(6), 1));
         low.addView(hb);
-        TextView mp = text(m.mp != null ? "MP " + num(m.mp.cur) + "/" + num(m.mp.max) : m.mpInvalid ? "MP invalid" : "MP —", 13,
+        TextView mp = text(m.mp != null ? "MP " + num(m.mp.cur) + "/" + num(m.mp.max) : m.mpInvalid ? "MP invalid" : "MP \u2014", 12,
                 m.mp != null ? MP : DIM, false);
         oneLine(mp);
         mp.setPadding(dp(8), 0, 0, 0);
         mp.setGravity(Gravity.END);
-        mp.setMinWidth(dp(92));                                  // same bar length on every row
+        mp.setMinWidth(dp(86));                                  // same bar length on every row
         low.addView(mp);
         r.addView(low);
+        // Status chips (game script 0.16+): bad effects filled red, buffs outlined blue; the names are the game's.
+        List<Party.Chip> chips = Party.chips(m.status, this::loadReference);
+        if (!chips.isEmpty()) {
+            android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+            float density = getResources().getDisplayMetrics().density;
+            for (Party.Chip c : chips) {
+                int s0 = sb.length();
+                sb.append(c.name);
+                sb.setSpan(new ChipSpan(c.adverse ? BAD : ACCENT, BG, c.adverse ? ChipSpan.Style.FILL : ChipSpan.Style.OUTLINE,
+                        density), s0, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.append(" ");
+            }
+            TextView st = text("", 10, TEXT, false);
+            st.setText(sb);
+            st.setLineSpacing(dp(2), 1f);
+            st.setPadding(0, dp(1), 0, 0);
+            r.addView(st);
+        }
         return r;
     }
 
@@ -1335,7 +1363,9 @@ public class MainActivity extends Activity {
             for (int i = 0; i < Target.ELEMENTS.length; i++) {
                 if ((g.mask & (1 << i)) == 0) continue;
                 int s0 = sb.length();
-                sb.append(Target.ELEMENTS[i]);
+                Reference names = loadReference();                    // 0.16.0: the game's own element names
+                String en = names != null ? names.elementName(i) : null;
+                sb.append(en != null ? en : Target.ELEMENTS[i]);
                 ChipSpan.Style st = g.kind == Target.Group.Kind.ABSORB ? ChipSpan.Style.OUTLINE
                         : g.kind == Target.Group.Kind.IMMUNE ? ChipSpan.Style.STRUCK : ChipSpan.Style.FILL;
                 int col = g.kind == Target.Group.Kind.HALF ? (ELEMENT_COLORS[i] & 0x00FFFFFF) | 0x80000000 : ELEMENT_COLORS[i];

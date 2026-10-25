@@ -106,8 +106,16 @@ public class SetupInputsTest {
         check(step(v, "loaders").state == SetupFlow.State.UNKNOWN && step(v, "loaders").messageKey.equals("loader_not_seen")
                 && "Show setup steps".equals(SetupText.label(step(v, "loaders").action)),
                 "new user, no loader receipt ever: loaders unknown (not missing), \"" + SetupText.line("loader_not_seen") + "\"");
-        check(v.firstBlocker.id.equals("loaders") && step(v, "data").messageKey.equals("data_pack_missing"),
-                "  game data that can't be built yet waits: the loader step has the button");
+        check(v.firstBlocker.id.equals("loaders") && step(v, "data").messageKey.equals("data_wait_script")
+                && step(v, "data").state == SetupFlow.State.UNKNOWN,
+                "  game data that can't be built yet waits (\"" + SetupText.line("data_wait_script") + "\"): the loader step has the button");
+        // 0.16.1: started from the app, nothing back after 90 s: the card points at the mod loaders
+        o.launchedNoLoader = true;
+        v = run(o);
+        check(v.firstBlocker.id.equals("loaders") && step(v, "loaders").state == SetupFlow.State.MISSING
+                && step(v, "loaders").messageKey.equals("loader_not_loading") && SetupText.line("loader_not_loading").contains("Enable mod loaders"),
+                "game started but no loader: \"" + SetupText.line("loader_not_loading").substring(0, 60) + "...\"");
+        o.launchedNoLoader = false;
 
         o.loaderStatus = m("contract", "ffxii.loader.v1", "stub", 2L, "result", "ok", "version", "0.15.0-beta", "sequence", 6L,
                 "wallTime", SESSION_WALL - 5);
