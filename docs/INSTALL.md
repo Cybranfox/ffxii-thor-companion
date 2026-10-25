@@ -8,7 +8,9 @@ Everything the companion uses lives in `Download/FFXII_companion` (`D:\FFXII_com
 
 ## 0. One time: mod loaders under GameNative
 
-Skip this if the loaders already work for you (other Lua mods load).
+**Don't skip this unless other Lua mods already work for you.** The companion's game script runs inside FFXII through
+these two loaders. Without them (or with GameNative's Enable mod loaders off) the game runs normally but nothing
+reaches the companion, and its Setup card keeps waiting. install.cmd warns if it can't find them.
 
 1. Download ffgriever's [FF12 External File Loader](https://www.nexusmods.com/finalfantasy12/mods/170) and
    [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171) (use the current version; 2.0.1 with External File Loader 1.6.1 is tested).

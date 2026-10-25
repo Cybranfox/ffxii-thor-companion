@@ -127,6 +127,12 @@ but with this setup it plays well for me. The one real problem is the exit hang 
 ## Install / remove (short version)
 
 Install (the app's Setup card walks you through it and shows the next step):
+0. **First, ffgriever's two mod loaders have to be working in FFXII** (the companion's script runs through them):
+   [FF12 External File Loader](https://www.nexusmods.com/finalfantasy12/mods/170) and
+   [FF12 LUA Script Loader](https://www.nexusmods.com/finalfantasy12/mods/171) copied into the game's `x64` folder, the
+   newer C++ runtime next to them, and GameNative's **Enable mod loaders** switched on. If you've never set those up,
+   do [step 0 of the install guide](docs/INSTALL.md#0-one-time-mod-loaders-under-gamenative) first (about 10 minutes).
+   Without them the game runs fine but the companion just waits.
 1. Install the **APK** on the Thor, open it on the bottom screen and tap **Allow file access**. It puts the loader, the
    signed game script and the installer in `Download/FFXII_companion/install`.
 2. Once only: in GameNative, open the game's container and run `D:\FFXII_companion\install\install.cmd`.
