@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.16.1-beta
+- **Status chips on the party.** Each party member now shows their status effects under the HP bar, with the game's own
+  names: bad ones (Poison, Silence, Slow and so on) as filled red chips first, buffs (Protect, Shell, Haste, Regen...)
+  outlined in blue. KO and HP Critical aren't repeated, since the row already shows them.
+- **All four party members fit again.** The rows are more compact now: job icons, HP bar and MP on one line, and the
+  chips underneath only when someone actually has a status.
+- **Element names from your game.** The Targeting card's element chips use the game's own names.
+- **A clearer setup when the mod loaders aren't working.** If you start FFXII from the companion and nothing comes back
+  from the game after a minute and a half, the Setup card now says the mod loaders didn't run and what to check:
+  GameNative's Enable mod loaders, ffgriever's loader files in `x64`, and the C++ runtime. Before, it just kept
+  waiting. Thanks to the Redditor who reported this.
+- The Game data line no longer shows a red warning before the game script is even running; it says it comes next.
+- **README:** ffgriever's two loaders are now an explicit step 0 in the install steps, since they're the part people
+  most often miss.
+- Updating: install the new APK and restart the game. The app rebuilds its game data by itself (a few seconds) to pick
+  up the status names. If you built your data with the PC builder, re-run it once.
+- Still open: the exit hang under GameNative. Use the Quick Menu › Exit for now.
+
 ## 0.16.0-beta
 - **The map fills in as you explore.** The game only saves an area's exploration when you leave it, so until now the
   companion showed the area you're in as it was last time (or nothing, the first time you walk in). The game script
