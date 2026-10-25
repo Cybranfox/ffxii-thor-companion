@@ -40,6 +40,14 @@ final class ZodiacBackground extends View {
     private final float density;
     private long lastFrame;
     private int w, h;
+    private boolean calm;          // 0.16.0: still while the game runs (the animation cost ~20% CPU on the shared chip)
+
+    /** 0.16.0 (performance): hold the sky still (true) while FFXII is running; animate again when it's not. */
+    void setCalm(boolean c) {
+        if (c == calm) return;
+        calm = c;
+        invalidate();
+    }
 
     ZodiacBackground(Context c) {
         super(c);
@@ -73,6 +81,7 @@ final class ZodiacBackground extends View {
             star.setColor(((int) (a * 200) << 24) | 0xE8F0FF);
             c.drawCircle(sx[i] * w, sy[i] * h, ss[i] * density, star);
         }
+        if (calm) return;                                   // drawn once; redrawn only when the view changes
         if (now - lastFrame >= 50) { lastFrame = now; postInvalidateDelayed(50); } else postInvalidateDelayed(50 - (now - lastFrame));
     }
 

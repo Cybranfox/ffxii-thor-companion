@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Job 6 (licence board 7). Original art, no game assets; the app tints it. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+  <path android:pathData="M6.5,3h11M6.5,21h11" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M7.5,3c0,5 4.5,6 4.5,9s-4.5,4 -4.5,9M16.5,3c0,5 -4.5,6 -4.5,9s4.5,4 4.5,9" android:strokeColor="#FFFFFFFF" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000"/>
+  <path android:pathData="M9.5,18.5h5l-2.5,-2Z" android:fillColor="#FFFFFFFF" android:fillAlpha="0.5"/>
+</vector>

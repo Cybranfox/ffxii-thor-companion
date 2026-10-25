@@ -28,7 +28,7 @@ There are three pieces, and each only does its own job:
    script copies the files it needs while you play (about 5 minutes) and the app builds the data. A PC data builder is
    still available as an alternative.
 
-**[▶ Watch the 0.15 video: setup from a fresh install, then the features](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.15.0-beta/FFXII_Thor_Companion_0.15.0-beta.mp4)** (2 min) · [first demo (0.9)](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.9.0-beta/FFXII_Thor_Companion_launch_0.9.0-beta.mp4) · Install guide: **[docs/INSTALL.md](docs/INSTALL.md)**
+**[▶ Watch the 0.16 video: the live map, new icons and the rest](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.16.0-beta/FFXII_Thor_Companion_0.16.0-beta.mp4)** (1.5 min) · [0.15 setup walkthrough](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.15.0-beta/FFXII_Thor_Companion_0.15.0-beta.mp4) · [first demo (0.9)](https://github.com/Cybranfox/ffxii-thor-companion/releases/download/v0.9.0-beta/FFXII_Thor_Companion_launch_0.9.0-beta.mp4) · Install guide: **[docs/INSTALL.md](docs/INSTALL.md)**
 
 ## Requirements
 

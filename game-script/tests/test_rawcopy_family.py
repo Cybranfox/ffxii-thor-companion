@@ -286,7 +286,9 @@ def run_suite(runtime):
         w.drive(1000)
         st = w.snapshot()['rawcopy']
         assert st['status'] == 'running' and st['bytes'] > 0 and st.get('paused') is None, st
-        w.alive(age=120)                                                  # app gone for 2 minutes
+        mem[BATTLE_FLAGS] = 4  # preserve copy while unchanged-token lease expires
+        w.drive(32000)
+        mem[BATTLE_FLAGS] = 0
         w.drive(3000)
         b1 = w.snapshot()['rawcopy']
         w.drive(3000)
@@ -315,11 +317,11 @@ def run_suite(runtime):
             w.drive(3000)
             st = w.snapshot()['rawcopy']
             assert st['status'] == 'error' and st['error'] == why, (text[:40], st)
-            assert [p.name for p in raw.iterdir()] == sorted(['alive.txt', 'request.txt']) or \
-                sorted(p.name for p in raw.iterdir()) == ['alive.txt', 'request.txt'], list(raw.iterdir())
+            assert [p.name for p in raw.iterdir()] == sorted(['alive.txt', 'request.txt', 'request_error.txt']) or \
+                sorted(p.name for p in raw.iterdir()) == ['alive.txt', 'request.txt', 'request_error.txt'], list(raw.iterdir())
     ok += 1
     print(f'PASS ({ver}) bad requests refused (job id, contract, config index, unsafe name, unknown line, '
-          'too many items, oversized), nothing created')
+          'too many items, oversized), refusal marker only')
 
     # 8 + 10. exit stops the copy; the copier adds no game-memory reads
     with tempfile.TemporaryDirectory() as td:

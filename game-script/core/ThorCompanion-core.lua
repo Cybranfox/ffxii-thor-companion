@@ -9,7 +9,7 @@
 --Protocol: docs/PROTOCOL.md. History: CHANGELOG.md.
 
 local PROTOCOL = 1
-local PRODUCER = { name = "ThorCompanion-lua", version = "0.15.0-beta" }
+local PRODUCER = { name = "ThorCompanion-lua", version = "0.16.0-beta" }
 
 --Under GameNative on the AYN Thor, Wine drive D: is /sdcard/Download, so this is Download/FFXII_companion on the device.
 local BASE_DIR = "D:/FFXII_companion/"
@@ -206,15 +206,21 @@ local REVEAL_RECORD_OFFSET = 0x224
 local REVEAL_RECORD_BYTES = 32
 local REVEAL_MAX_SLOT = 0x180
 
-local function supportedBuild()
+local supportedBuild = (function()
+local verified = false  --cache only a successful immutable image-header check
+return function()
+  if verified then return true end
   local ok, res = pcall(function()
     if memory.u16[IMAGE_BASE] ~= 0x5A4D then return false end
     local lfanew = memory.u32[IMAGE_BASE + 0x3C]
     if memory.u32[IMAGE_BASE + lfanew] ~= 0x00004550 then return false end
     return memory.u32[IMAGE_BASE + lfanew + 0x08] == SUPPORTED_TIME_DATE_STAMP
   end)
-  return ok and res == true
+  verified = ok and res == true
+  return verified
 end
+
+end)()
 
 local function revealSlot(mapId)
   local ok, slot = pcall(function()
@@ -241,6 +247,11 @@ end
 
 local REVEAL_TABLE_MS = 10000
 local revealTable, revealTableClock = nil, nil
+--Slow readers use separate 500-ms poll phases; elapsed caps recover from skipped/delayed phases.
+local forceTable = { force = true, poll = 0 }
+function forceTable.due(last, now, modulus, phase, maxAge)
+  return not last or (now ~= last and (forceTable.poll % modulus == phase or now - last >= maxAge))
+end
 
 --All slots 0..0x180 as "slot:hex,..." for non-zero records; nil when a read fails.
 local function readRevealTable()
@@ -264,7 +275,7 @@ end
 --Same gates as revealState (supported build, root pointer). Kept until the next refresh; "stable" as there.
 local function revealTableState(force)
   local now = safeCall(event.getClock) or 0
-  if not force and revealTable and revealTableClock and now - revealTableClock < REVEAL_TABLE_MS * 1000 then
+  if not force and revealTable and not forceTable.due(revealTableClock, now, 20, 7, REVEAL_TABLE_MS * 1000) then
     return revealTable
   end
   revealTableClock = now
@@ -288,7 +299,8 @@ end
 --Status values: ok, unsupported_build, no_map, nav_not_loaded, no_slot, root_unexpected, unstable, read_failed.
 --"record" is present only with status ok. "stable" means two consecutive reads matched; it detects a write
 --during the read, not a coherent snapshot of other game state.
-local function revealState(mapId)
+local revealState = (function()
+local function savedState(mapId)
   local r = { contract = REVEAL_CONTRACT, mapId = mapId }
   if not supportedBuild() then r.status = "unsupported_build"; return r end
   if type(mapId) ~= "number" or math.type(mapId) ~= "integer" then r.status = "no_map"; return r end
@@ -307,6 +319,90 @@ local function revealState(mapId)
   r.observedClockUs = safeCall(event.getClock)
   return r
 end
+
+--Inside revealState's closure. Fixed-address reads only; savedState remains unchanged.
+local FLAGS, BOUND, DESC, SCRATCH = 0x2B45A00, 0x2B476B8, 0x2B45A50, 0x2B45978
+local SAVE_PTR, SAVE, CURRENT_MAP = 0x2EBF190, 0x21B290C, 0x21654C4
+local SETTLE_US, CONFIRM_US = 1000000, 500000
+local seenMap, seenJumps, settleUntil, readyMeta, readyAt
+
+local function resetReady() readyMeta, readyAt = nil, nil end
+local function same(a, b)
+  if not a or not b or #a ~= #b then return false end
+  for i = 1, #a do if a[i] ~= b[i] then return false end end
+  return true
+end
+local function metadata()
+  return { memory.u64[SAVE_PTR], memory.u32[SAVE], memory.u32[FLAGS], memory.u32[BOUND],
+           memory.u64[DESC], memory.u16[DESC + 8], memory.u16[DESC + 10],
+           memory.u16[DESC + 12], memory.u16[DESC + 14], memory.u16[DESC + 16],
+           memory.u32[CURRENT_MAP] }
+end
+local function valid(m, mapId)
+  if m[1] ~= SAVE or m[2] ~= 0x05071901 then return "save_not_ready" end
+  if (m[3] & 1) == 0 then return "inactive" end
+  if m[4] ~= mapId or m[11] ~= mapId then return "map_mismatch" end
+  if m[5] ~= SCRATCH then return "pointer_unexpected" end
+  local w, h, cols, rows, stride = m[6], m[7], m[8], m[9], m[10]
+  if w < 64 or h < 64 or w > 4096 or h > 4096 or w % 64 ~= 0 or h % 64 ~= 0
+     or cols ~= w // 64 or rows ~= h // 64 or cols % 8 ~= 0
+     or stride ~= (cols >> 3) or stride < 1 or rows * stride > 32 then return "descriptor_invalid" end
+end
+local function bitmap()
+  local words = {}
+  for i = 0, 28, 4 do
+    local v = memory.u32[SCRATCH + i]
+    words[#words + 1] = string.format("%02x%02x%02x%02x", v & 255, (v >> 8) & 255,
+                                     (v >> 16) & 255, (v >> 24) & 255)
+  end
+  return table.concat(words)
+end
+local function sampleLive(mapId)
+  local now = safeCall(event.getClock)
+  if type(now) ~= "number" then resetReady(); return nil, "clock_unavailable" end
+  local a = metadata()
+  local why = valid(a, mapId)
+  if why then seenMap = nil; resetReady(); return nil, why end
+  if seenMap ~= mapId or seenJumps ~= mapJumps or (readyAt and now < readyAt) then
+    seenMap, seenJumps, settleUntil = mapId, mapJumps, now + SETTLE_US
+    resetReady()
+  end
+  if now < settleUntil then return nil, "transition" end
+  local first = bitmap()
+  --Recheck active/binding/readiness between copies, then enclose the second copy as well.
+  local b = metadata()
+  local invalidB = valid(b, mapId)
+  if invalidB then seenMap = nil end
+  if not same(a, b) or invalidB then resetReady(); return nil, "unstable" end
+  local second = bitmap()
+  local c = metadata()
+  local invalidC = valid(c, mapId)
+  if invalidC then seenMap = nil end
+  if not same(b, c) or invalidC or first ~= second then
+    resetReady(); return nil, "unstable"
+  end
+  --The native no-record initializer fills 128 bytes with FF. A fully explored record is indistinguishable:
+  --omit either rather than ever publishing this ambiguous all-ones source. Saved bytes remain available.
+  if first:sub(1, a[9] * a[10] * 2) == string.rep("ff", a[9] * a[10]) then resetReady(); return nil, "all_ones_ambiguous" end
+  if not same(a, readyMeta) then readyMeta, readyAt = a, now; return nil, "confirming" end
+  if now - readyAt < CONFIRM_US then return nil, "confirming" end
+  return { record = first, source = "live", w = a[6], h = a[7], stride = a[10], map = mapId }, "ok"
+end
+
+return function(mapId)
+  local r = savedState(mapId)
+  if r.status ~= "ok" then
+    seenMap, seenJumps, settleUntil = nil, nil, nil
+    resetReady()
+    return r
+  end
+  local ok, live, reason = pcall(sampleLive, mapId)
+  if not ok then resetReady(); r.liveStatus = "read_failed"
+  else r.live, r.liveStatus = live, reason end
+  return r
+end
+
+end)()
 
 --A mod's config file (in the game folder, written by that mod) is a Lua chunk returning tables. It is run, as text, with
 --an empty environment: no globals, no I/O, no game access. That is not a sandbox against a hostile file (a loop could
@@ -394,7 +490,7 @@ local function snapshot()
   return {
     hello = staticHello,
     session = {
-      loaderVersion = loaderVersion(),
+      loaderVersion = staticHello and staticHello.loader.lua or loaderVersion(),
       clockUs = safeCall(event.getClock),
       wallTime = os.time(),
     },
@@ -402,7 +498,6 @@ local function snapshot()
   }
 end
 
-local forceTable = true
 
 --Menu-map position (statically traced, 21 Oct 2026). The field update 0x3C6000 runs while [0x2B45A00] & 1 and copies
 --the controlled actor's x, y, z (w = 1.0) into MAP_POS. MAP_ORIGIN is the current sheet's NPS2 (x0, z0); MAP_EXTENT its
@@ -487,7 +582,7 @@ end
 --Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
 local function gambitState()
   local now = safeCall(event.getClock) or 0
-  if not forceGambits and gambits and gambitsClock and now - gambitsClock < GAMBITS_MS * 1000 then return gambits end
+  if not forceGambits and gambits and not forceTable.due(gambitsClock, now, 4, 1, (GAMBITS_MS + 1500) * 1000) then return gambits end
   forceGambits = false
   gambitsClock = now
   local r = { contract = "ffxii.gambits.v1" }
@@ -549,12 +644,18 @@ for _, f in ipairs(RT_FIELDS) do RT_OFFS[#RT_OFFS + 1] = f[1] end
 local editSeen, editPending, editLast, editNewSet, editLogQueue = {}, nil, nil, nil, {}
 local editHooked = false   --true once the load-time frame hook is registered (armed at game start)
 
-local function fileExists(path)
-  local f = io.open(path, "rb")
-  if not f then return false end
-  f:close()
-  return true
-end
+--Cache only the status probe. Every incoming edit still forces a fresh ARMED check below.
+local fileExists = (function()
+  local armObserved
+  return function(path, refresh)
+    if path == EDIT_ARM and not refresh and armObserved ~= nil then return armObserved end
+    local f = io.open(path, "rb")
+    local present = f ~= nil
+    if f then f:close() end
+    if path == EDIT_ARM then armObserved = present end
+    return present
+  end
+end)()
 
 local function setAddr(m, k) return GAMBIT_BASE + GAMBIT_SETS + m * GAMBIT_STRIDE + k * SET_BYTES end
 local function runtimeAddr(m) return RUNTIME_LIST + m * RUNTIME_STRIDE end
@@ -615,7 +716,10 @@ local function copyTable(t)
   local recs = {}
   for c = 0, t.count - 1 do
     local r, b = (t.first + c * t.stride) & 0xFFFFFFFF, {}
-    for o = 0, 0x1F do b[o] = memory.u8[r + o] end
+    for o = 0, 0x1F, 4 do
+      local v = memory.u32[r + o]
+      b[o], b[o + 1], b[o + 2], b[o + 3] = v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF
+    end
     recs[c] = b
   end
   return { source = "cache", stride = t.stride, count = t.count, recs = recs,
@@ -1038,7 +1142,7 @@ local function editTick()
   editSeen[cmd.id] = true
   editSeenOrder[#editSeenOrder + 1] = cmd.id
   if #editSeenOrder > SEEN_MAX then editSeen[table.remove(editSeenOrder, 1)] = nil end
-  if not fileExists(EDIT_ARM) then finishEdit(editResult(cmd, "rejected", "not_armed")); return end
+  if not fileExists(EDIT_ARM, true) then finishEdit(editResult(cmd, "rejected", "not_armed")); return end
   if not editHooked then finishEdit(editResult(cmd, "rejected", "editor_not_started")); return end
   local age = os.time() - cmd.issued
   if age > CMD_MAX_AGE_S or age < -30 then finishEdit(editResult(cmd, "rejected", "command_too_old")); return end
@@ -1054,8 +1158,9 @@ local tableClock = nil
 local function editState()
   --condition-table diagnostics + copy refresh every 2 s (read-only)
   local now = safeCall(event.getClock) or 0
-  if not tableClock or now - tableClock >= GAMBITS_MS * 1000 then
+  if forceTable.due(tableClock, now, 4, 2, (GAMBITS_MS + 1500) * 1000) then
     tableClock = now
+    fileExists(EDIT_ARM, true)  --refresh display status even without an edit command
     if supportedBuild() then pcall(condTable, true) end
   end
   return { contract = EDIT_CONTRACT, armed = fileExists(EDIT_ARM), hooked = editHooked,
@@ -1174,7 +1279,7 @@ end
 --Live licence-node table as {count, stride, hex}; nil, why when it is not available.
 --A battle-pack table as {count, stride, hex} through its descriptor (u16 count +4, u16 stride +8, u32 data +0xC, plus the
 --pack base); nil, why when it is not available.
-local function readPackTable(descPtr)
+local function readPackTable(descPtr, knownKey)
   local desc, base = memory.u64[descPtr], memory.u64[PACK_BASE_PTR]
   if desc == nil or desc == 0 then return nil, "desc_null" end
   if base == nil then return nil, "base_unreadable" end
@@ -1183,19 +1288,25 @@ local function readPackTable(descPtr)
   if count < 1 or count > 1024 or stride < 8 or stride > 64 then return nil, "shape" end
   local first = (base + off) & 0xFFFFFFFF
   if first < 0x10000 then return nil, "records_null" end
+  local total = count * stride
+  local function hx(a, b) local h = {}; for i = a, b - 1 do h[#h + 1] = string.format("%02x", memory.u8[(first + i) & 0xFFFFFFFF]) end; return table.concat(h) end
+  local key = count .. ":" .. stride .. ":" .. (2 * total) .. ":" .. hx(0, math.min(48, total)) .. hx(math.max(0, total - 48), total)
+  if key == knownKey then return { key = key, same = true } end
   local t = {}
   for i = 0, count * stride - 1 do t[#t + 1] = string.format("%02x", memory.u8[(first + i) & 0xFFFFFFFF]) end
-  return { count = count, stride = stride, records = table.concat(t) }
+  local records = table.concat(t)
+  key = count .. ":" .. stride .. ":" .. #records .. ":" .. records:sub(1, 96) .. records:sub(-96)
+  return { count = count, stride = stride, records = records, key = key }
 end
 
-local function readLicNodes() return readPackTable(LIC_DESC_PTR) end
+local function readLicNodes(k) return readPackTable(LIC_DESC_PTR, k) end
 
 --0.5.12: same as licNodesTick for the equipment table (557 x 0x34 in this pack).
 local function equipTick(now)
-  local ok, n, why = pcall(readPackTable, EQUIP_DESC_PTR)
+  local ok, n, why = pcall(readPackTable, EQUIP_DESC_PTR, equipKey)
   if not ok then equipInfo = { status = "read_failed" }; return end
   if not n then equipInfo = { status = why }; return end
-  local key = n.count .. ":" .. n.stride .. ":" .. #n.records .. ":" .. n.records:sub(1, 96) .. n.records:sub(-96)
+  local key = n.key
   if key == equipKey then return end
   local f = io.open(EQUIP_FILE, "w")
   if not f then equipInfo = { status = "write_failed" }; return end
@@ -1207,10 +1318,10 @@ local function equipTick(now)
 end
 
 local function licNodesTick(now)
-  local ok, n, why = pcall(readLicNodes)
+  local ok, n, why = pcall(readLicNodes, licNodesKey)
   if not ok then licNodesInfo = { status = "read_failed" }; return end
   if not n then licNodesInfo = { status = why }; return end
-  local key = n.count .. ":" .. n.stride .. ":" .. #n.records .. ":" .. n.records:sub(1, 96) .. n.records:sub(-96)
+  local key = n.key
   if key == licNodesKey then return end
   local f = io.open(LICNODES_FILE, "w")
   if not f then licNodesInfo = { status = "write_failed" }; return end
@@ -1224,7 +1335,7 @@ end
 --Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
 local function buildState()
   local now = safeCall(event.getClock) or 0
-  if build and buildClock and now - buildClock < GAMBITS_MS * 1000 then
+  if build and not forceTable.due(buildClock, now, 4, 0, (GAMBITS_MS + 1500) * 1000) then
     build.licenceNodes, build.equipment = licNodesInfo, equipInfo   --latest side results
     return build
   end
@@ -1337,7 +1448,7 @@ local function readParty()
       local f = memory.u32[m + 0x3C] | memory.u32[m + 0x64]
       if f & 0x00010000 ~= 0 then hpMax = math.max(hp, 1) elseif f & 0x10000000 ~= 0 then hpMax = 2 * hpMax end
       if (memory.u8[m + 0x6C] & 0x80) ~= 0 or (memory.u8[m + 0x7C] & 0x80) ~= 0 then mpMax = 0 end
-      out[#out + 1] = { slot = slot, member = id, name = PARTY_NAMES[id], role = "active",
+      out[#out + 1] = { slot = slot, member = id, name = PARTY_NAMES[id], role = "active", status = f,
                         hp = { cur = hp, max = hpMax }, mp = { cur = mp, max = mpMax } }
     end
   end
@@ -1561,7 +1672,7 @@ local last, lastClock                             --hunt state changes rarely: r
 --Status values: ok, unsupported_build, save_not_ready, read_failed, unstable.
 return function()
   local now = safeCall(event.getClock) or 0
-  if last and lastClock and now - lastClock < GAMBITS_MS * 1000 then return last end
+  if last and not forceTable.due(lastClock, now, 4, 3, (GAMBITS_MS + 1500) * 1000) then return last end
   lastClock = now
   last = { contract = "ffxii.quests.v1" }
   local r = last
@@ -1594,6 +1705,7 @@ end)()
 local rawCopy = (function()
 local RAW_DIR = BASE_DIR .. "raw/"
 local REQUEST = RAW_DIR .. "request.txt"
+local REQUEST_ERROR = RAW_DIR .. "request_error.txt"
 local ALIVE = RAW_DIR .. "alive.txt"
 local CONTRACT = "ffxii.rawcopy.v1"
 local SOURCES = { "A:/FFXII_TZA.vbf", "../FFXII_TZA.vbf" }          --GameNative maps the game root to A:; x64 is cwd
@@ -1609,7 +1721,11 @@ local CHECK_EVERY_S, ALIVE_S = 2, 30
 local st = { contract = CONTRACT, status = "idle" }   --published as data.rawcopy
 local job                                             --{ id, items, dir }
 local cur                                             --current item: { n, src, dst, size, off, from }
-local running, stopped, lastCheck = false, false, 0
+local running, stopped, lastCheck = false, false, -CHECK_EVERY_S * 1000000
+local pendingMarker, lastRefusal
+local MARKER_TRIES = 20                               --one immediate attempt, then at most 19 x 50 ms
+local lastAlive, aliveChangedAt, nextAliveCheck, away = nil, nil, 0, true
+local function clockUs() return event.getClock() end  --loader monotonic microseconds, not os.time()
 
 local function readSmall(path, cap)
   local f = io.open(path, "rb")
@@ -1624,8 +1740,32 @@ local function writeSmall(path, text)
   local f = io.open(path, "wb")
   if not f then return false end
   local ok = f:write(text)
-  f:close()
-  return ok ~= nil
+  local closed = f:close()
+  return ok ~= nil and closed ~= nil
+end
+
+--Publish only a complete marker; never turn a short write into an apparent success.
+local function queueMarker(path, text)
+  local p = { path = path, text = text, attempts = 0 }
+  pendingMarker = p
+  st.markerError, st.markerAttempts, st.markerPending = nil, 0, true
+  local function attempt()
+    if stopped or pendingMarker ~= p then return end
+    p.attempts = p.attempts + 1
+    local ok, wrote = pcall(function()
+      return writeSmall(p.path .. ".tmp", p.text) and os.rename(p.path .. ".tmp", p.path)
+    end)
+    st.markerAttempts = p.attempts
+    if ok and wrote then
+      pendingMarker = nil
+      st.markerError, st.markerPending = nil, false
+    else
+      st.markerError = "marker_write"                 --terminal status/error remain backward compatible
+      if p.attempts < MARKER_TRIES then event.executeAfterMs(TICK_MS, attempt)
+      else pendingMarker = nil; st.markerPending = false end
+    end
+  end
+  attempt()
 end
 
 local function closeCur()
@@ -1639,8 +1779,8 @@ end
 local function fail(reason)
   closeCur()
   st.status, st.error = "error", reason
-  if job then writeSmall(job.dir .. "error.txt", reason .. "\n") end
   running = false
+  if job then queueMarker(job.dir .. "error.txt", reason .. "\n") end
 end
 
 local function openArchive()
@@ -1768,24 +1908,28 @@ local function finishItem()
   r:close()
   writeSmall(job.dir .. "cursor.txt", string.format("%d 0\n", n + 1))
   if n == #job.items then
-    writeSmall(job.dir .. "done.txt", "done\n")
-    st.status, running = "done", false
+    st.status, st.error, running = "done", nil, false
+    queueMarker(job.dir .. "done.txt", "done\n")
     return true
   end
   return openItem(n + 1, 0)
 end
 
-local function appAway()
-  local alive = tonumber((readSmall(ALIVE, 32) or ""):match("^(%d+)"))
-  return not alive or os.time() - alive > ALIVE_S
+local function appAway(now)
+  local alive = (readSmall(ALIVE, 32) or ""):match("^(%d+)%s*$")
+  if alive and #alive <= 20 and alive ~= lastAlive then
+    lastAlive, aliveChangedAt = alive, now
+  end
+  --First observation grants one lease, even for an old file; no foreign clock can extend it.
+  return not aliveChangedAt or now - aliveChangedAt > ALIVE_S * 1000000
 end
-
-local nextAliveCheck, away = 0, false
 local function tick()
   if stopped or not running then return end
   local ok = pcall(function()
-    local now = os.time()
-    if now >= nextAliveCheck then away, nextAliveCheck = appAway(), now + CHECK_EVERY_S end
+    local now = clockUs()
+    if now >= nextAliveCheck then
+      away, nextAliveCheck = appAway(now), now + CHECK_EVERY_S * 1000000
+    end
     local pauseReason = battle.candidate and "fight" or (away and "app_away") or nil   --fight: checked every tick
     st.paused = pauseReason
     if pauseReason or not cur then return end
@@ -1808,19 +1952,36 @@ end
 
 --Called from the 500 ms poll: looks for a (new) request at most every CHECK_EVERY_S while idle.
 local function poll()
-  if running or stopped then return end
-  local now = os.time()
-  if now - lastCheck < CHECK_EVERY_S then return end
+  if running or stopped or pendingMarker then return end
+  local now = clockUs()
+  if now - lastCheck < CHECK_EVERY_S * 1000000 then return end
+  away, nextAliveCheck = appAway(now), now + CHECK_EVERY_S * 1000000
   lastCheck = now
   local f = io.open(REQUEST, "rb")
   if not f then return end
   local text = f:read(MAX_REQUEST + 1) or ""
   f:close()
   local j, why = parseRequest(text)               --an oversized request is reported (request_size), not ignored
-  if not j then st.status, st.error = "error", why; return end
+  if not j then
+    st.status, st.error, st.job = "error", why, nil    --do not attribute a new refusal to the old job
+    if text ~= lastRefusal then
+      lastRefusal = text
+      os.remove(REQUEST_ERROR)                       --Wine rename need not replace an existing file
+      local id = text:match("^job=([^\n]+)") or text:match("\njob=([^\n]+)") or ""
+      id = id:gsub("\r$", "")  --normalize a CRLF job line before safe refusal correlation
+      if #id > 32 or not id:match("^[A-Za-z0-9_%-]+$") then id = "" end
+      st.requestJob = id
+      queueMarker(REQUEST_ERROR, "contract=" .. CONTRACT .. "\njob=" .. id .. "\nerror=" .. why .. "\n")
+    end
+    return
+  end
+  if lastRefusal then os.remove(REQUEST_ERROR); lastRefusal = nil end
+  st.requestJob = nil
   if job and job.id == j.id and st.status ~= "running" then return end   --finished or failed: wait for a new job id
   job = j
   st.job, st.error, st.paused = j.id, nil, nil
+  os.remove(REQUEST_ERROR)                           --also discard a refusal left by an earlier core session
+  st.markerError, st.markerAttempts, st.markerPending = nil, nil, nil
   if lfs and lfs.mkdir then pcall(lfs.mkdir, RAW_DIR:sub(1, -2)); pcall(lfs.mkdir, j.dir:sub(1, -2)) end
   if readSmall(j.dir .. "done.txt", 16) then st.status = "done"; return end
   if readSmall(j.dir .. "error.txt", 256) then st.status, st.error = "error", "previous_error"; return end
@@ -1833,7 +1994,7 @@ end
 
 local function stop()
   stopped = true
-  running = false
+  running, pendingMarker = false, nil
   closeCur()
 end
 
@@ -1855,8 +2016,8 @@ local function addReveal(data)
     data.gambits = gambitState()
     data.gambitEdit = editState()
     data.build = buildState()
-    data.revealTable = revealTableState(forceTable)
-    forceTable = false
+    data.revealTable = revealTableState(forceTable.force)
+    forceTable.force = false
   end
   return data
 end
@@ -1872,6 +2033,8 @@ local function writeSnapshot(force)
     return t
   end
   local digest = encode(list(data.map, data.reveal and data.reveal.status, data.reveal and data.reveal.record,
+                          data.reveal and data.reveal.liveStatus,
+                          data.reveal and data.reveal.live and encode(data.reveal.live),
                           data.revealTable and data.revealTable.status, data.revealTable and data.revealTable.records,
                           data.position and data.position.status, data.position and data.position.x,
                           data.position and data.position.z, data.position and data.position.originX,
@@ -1926,16 +2089,17 @@ end
 
 local function poll()
   if exiting then return end
+  forceTable.poll = forceTable.poll + 1
   pcall(editTick)
   pcall(rawCopy.poll)
-  writeSnapshot(false)
+  pcall(writeSnapshot, false)  --a transient output failure must not stop future polls
   event.executeAfterMs(POLL_MS, poll)
 end
 
 local function onMapJump(locationId, posIndex, flags, unknown)
   if exiting then return end
   mapJumps = mapJumps + 1
-  forceTable = true
+  forceTable.force = true
   forceGambits = true
   lastJump = { locationId = locationId, posIndex = posIndex, flags = flags, unknown = unknown, clockUs = safeCall(event.getClock) }
   writeSnapshot(true)
@@ -1954,7 +2118,8 @@ end
 
 local function start()
   ensureOutDir()
-  revealTable, revealTableClock, forceTable = nil, nil, true
+  revealTable, revealTableClock = nil, nil
+  forceTable.force, forceTable.poll = true, 0
   gambits, gambitsClock, forceGambits = nil, nil, true
   staticHello = {
     protocol = PROTOCOL,

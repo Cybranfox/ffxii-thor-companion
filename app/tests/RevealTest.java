@@ -219,6 +219,27 @@ public final class RevealTest {
             check(m.reason != null && m.reason.contains(c[1]), c[0] + ": " + m.reason);
         }
         ok("no marker: origin mismatch, game map inactive, outside the sheet, old script");
+        { // 0.16.0: reveal.live (game script 0.17+) only for this sheet and only when every gate passes
+            Atlas.Sheet sh = atlas.sheets(581).get(0);
+            String hex = "01" + "00".repeat(31);
+            java.util.function.Function<String, java.util.Map<String, Object>> rv = live -> {
+                @SuppressWarnings("unchecked") java.util.Map<String, Object> m = (java.util.Map<String, Object>) Json.parse(live);
+                return m;
+            };
+            String good = "{\"liveStatus\":\"ok\",\"live\":{\"record\":\"" + hex + "\",\"source\":\"live\",\"w\":" + sh.width
+                    + ",\"h\":" + sh.height + ",\"stride\":" + Reveal.strideFor(sh.width) + ",\"map\":581}}";
+            byte[] got = Reveal.liveRecord(rv.apply(good), 581, sh);
+            check(got != null && got[0] == 1 && got.length == 32, "live record accepted for its own sheet");
+            check(Reveal.liveRecord(rv.apply(good.replace("\"ok\"", "\"confirming\"")), 581, sh) == null, "liveStatus not ok -> unused");
+            check(Reveal.liveRecord(rv.apply(good), 578, sh) == null, "another map -> unused");
+            check(Reveal.liveRecord(rv.apply(good.replace("\"w\":" + sh.width, "\"w\":" + (sh.width * 2))), 581, sh) == null,
+                    "size differs from the atlas sheet -> unused");
+            check(Reveal.liveRecord(rv.apply(good.replace("\"stride\":" + Reveal.strideFor(sh.width), "\"stride\":9")), 581, sh) == null,
+                    "wrong stride -> unused");
+            check(Reveal.liveRecord(rv.apply(good.replace(hex, "01")), 581, sh) == null
+                    && Reveal.liveRecord(rv.apply("{\"liveStatus\":\"ok\"}"), 581, sh) == null, "short or missing record -> unused");
+            ok("reveal.live: used only when ok, same map, same sheet size and stride, 32 bytes");
+        }
         {
             Snapshot s = fx("pos_live_shape");
             Position.Marker m = Position.locate(s, atlas.sheets(581).get(0), false);

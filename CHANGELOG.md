@@ -1,5 +1,68 @@
 # Changelog
 
+## 0.16.0-beta
+- **The map fills in as you explore.** The game only saves an area's exploration when you leave it, so until now the
+  companion showed the area you're in as it was last time (or nothing, the first time you walk in). The game script
+  now also reads the game's own live progress for the area you're in, so it fills in as you go, like the game's map.
+  It only uses it once the game has finished loading the area, and never shows less than what's saved.
+- **A much lighter game script.** It was re-reading a couple of big data tables byte by byte every 2 seconds just to
+  see if they'd changed. Now it checks first and only reads them when they have. In the field it reads about 85% less
+  from the game's memory, and the bigger spikes every few seconds are gone. That should help keep the frame rate
+  steady; I'm still measuring it on the Thor.
+- **Status in two columns.** The bottom screen is nearly square, so Status now uses it that way: the map on the right,
+  filling its column, and Location, Targeting and Party on the left. In normal play you shouldn't need to scroll. Hunts
+  and Details are full width below. The map card keeps the same height, so it no longer jumps when a fight starts.
+- **Party rows** show name and HP on one line, with the two job icons at the start of the HP bar. The bar turns amber
+  below half, red below a quarter and grey at 0 or KO, and MP sits next to it.
+- **New icons.** A new app icon (twelve zodiac stars around a crystal), an icon beside each tab name, and an icon for
+  each job. All drawn for this app, nothing taken from the game.
+- **Element chips on the Targeting card.** What the enemy is weak to, halves, absorbs or is immune to is shown as
+  coloured chips in the game's element order: filled for weak, dimmed for halves, outlined for absorbs, struck through
+  for immune. The words are still there, so you don't have to learn the colours. HP numbers and a coloured HP bar too,
+  and who's targeting it gets its own line.
+- **Bestiary tables.** Drops, steals and poaches are small tables now, item on the left and chance on the right, instead
+  of plain text.
+- **Quieter cards.** When your game data is ready, the Game data card shrinks to one line in Details ("Game data ready"
+  with its own Rebuild button, so tapping the sentence no longer starts a copy). If the data is damaged, the card
+  stays and says so. The header is one short line ("Waiting for FFXII."). The Location card says "Last known" when the
+  game has stopped updating and never shows a bare map number. The map card says Loading…, Title screen or "The map
+  comes with the game data." instead of the same sentence for everything.
+- **Setup card reads install.cmd's result** before your first game start: "Loader installed. Start FFXII to finish
+  setup.", a warning if the mod loaders or the C++ runtime look missing, or a clear message if install.cmd couldn't
+  install the loader. Once the game itself reports in, that wins. The card only uses its own fixed wording, never text
+  from the file.
+- **install.cmd and uninstall.cmd open their result in Notepad**, so you can see INSTALLED (or what went wrong) right
+  away. GameNative's file list doesn't refresh on its own, so before you couldn't easily tell.
+- **Suggest knows what you're fighting.** Gambits that hit the current target's weaknesses come first, marked "(what
+  you're fighting now is weak to it)", and they're the last to be dropped when 12 slots aren't enough.
+- **Guest party members are named.** Party rows and the Targeting card's "targeted by" line now name guests from your
+  own game data instead of "Member N". The app rebuilds its game data by itself after the update to pick up the names
+  (a few seconds on the Thor). If you built your data with the PC builder, re-run it once for the names.
+- **More map fixes:**
+  - When there's nothing to show for the area you're in yet, the map frames that area's own outline with your
+    position in it, instead of a blank card.
+  - On the full map, pinching out past "this area" now carries on out to the whole region. Before, you could get stuck
+    zoomed in.
+  - Soft edges: explored ground now fades out at its edges, like on the game's map, instead of stopping in hard
+    square steps.
+- **Loader advice.** If the game reports a LUA Script Loader version the companion doesn't support, the message now
+  names the tested pair: LUA Script Loader 2.0.1 with External File Loader 1.6.1. The README recommends the same.
+  Thanks to ffgriever for both loaders.
+- **install.cmd keeps its backups properly.** The first loader it ever replaced stays in `ThorCompanion.previous.lua`
+  for good, and the one each run replaces goes to `ThorCompanion.replaced.lua`. Before, it decided whether two files
+  were the same by their size alone, so it could skip a backup.
+- Game script: also reports each party member's status effects (for status chips in a later update; nothing new on
+  screen yet), and the game-data copy is more robust when a file write fails or the app stops mid-copy.
+- **Release builds can't be signed with the debug key by accident.** The build now needs the release key, or an
+  explicit opt-in for a test build, and checks the certificate against the one in SECURITY.md. A debug-signed APK can't
+  update a release install, so this stops a broken update from ever going out.
+- **README: "My setup".** The exact device, GameNative version, container settings and loaders I play on, plus the
+  frame rate to expect.
+- Updating: install the new APK and restart the game. The new game script comes with it; no need to run install.cmd
+  again.
+- Still open: sometimes the game doesn't fully close under GameNative after quitting from its own menu. Use GameNative's
+  Quick Menu › Exit for now. I'm still looking into it.
+
 ## 0.15.0-beta
 - **No PC needed any more.** The app now builds your game data (names, licence boards, maps) on the Thor, from your
   own game files. Tap **Build game data**, start the game, and the game script copies what it needs a little at a time

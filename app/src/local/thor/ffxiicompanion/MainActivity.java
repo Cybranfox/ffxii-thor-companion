@@ -221,7 +221,8 @@ public class MainActivity extends Activity {
      */
     View buildUi() {
         android.widget.FrameLayout frame = new android.widget.FrameLayout(this);   // 0.21.0: animated sky behind everything
-        frame.addView(new ZodiacBackground(this), new android.widget.FrameLayout.LayoutParams(-1, -1));
+        sky = new ZodiacBackground(this);
+        frame.addView(sky, new android.widget.FrameLayout.LayoutParams(-1, -1));
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         frame.addView(root, new android.widget.FrameLayout.LayoutParams(-1, -1));
@@ -1014,6 +1015,9 @@ public class MainActivity extends Activity {
                 SystemClock.elapsedRealtime(), System.currentTimeMillis());
         dataEvents();
         render(v);
+        // Keep animating during play. Measured 25 Oct on the Thor: holding this screen still cut the app's CPU (~21% -> 8%)
+        // but made FFXII's frame pacing on the top screen much worse (missed frames ~4% -> ~17%); an animated bottom
+        // screen keeps it smooth (Perf_Results_2026-10-25.md). ZodiacBackground.setCalm stays for a later, cheaper keep-alive.
         showData(v);
         showSetup(v);
         data.tick(v.current != null ? Json.obj(v.current.data, "rawcopy") : null);
@@ -1120,13 +1124,14 @@ public class MainActivity extends Activity {
 
     void showParty(ReceiverState.View v) {
         setChip(partyChip, v.partyFamily);
-        partyRow.removeAllViews();
         if (v.location != null && Place.title(Json.lng(v.location.map(), "mapId"))) {   // 0.10.0: no party before a save loads
+            clearPartyRows();
             partyNote.setText("Load a save to see your party.");
             partyNote.setVisibility(View.VISIBLE);
             return;
         }
         if (v.party == null) {
+            clearPartyRows();
             partyNote.setText(partyReason(v.partyFamily));
             partyNote.setVisibility(View.VISIBLE);
             return;
@@ -1139,11 +1144,36 @@ public class MainActivity extends Activity {
         partyNote.setText(note);
         partyNote.setVisibility(note.isEmpty() ? View.GONE : View.VISIBLE);
         boolean stale = v.partyFamily.state != ReceiverState.FamilyState.LIVE;
+        Build jobsFrom = liveBuild(v);                            // 0.16.0: each member's two jobs, for the job icons
+        // 0.16.0 (performance): rebuild the rows only when something they show changed, not on every 1 s refresh.
+        StringBuilder key = new StringBuilder(stale ? "S" : "L").append(reference != null ? 'R' : '-');
+        for (Party.Member m : v.party.members) {
+            int[] j = jobs(jobsFrom, m.member);
+            key.append('|').append(m.slot).append(',').append(m.member).append(',').append(m.name).append(',').append(m.role)
+                    .append(',').append(m.leader).append(',').append(m.ko).append(',').append(vitalKey(m.hp)).append(',')
+                    .append(vitalKey(m.mp)).append(',').append(m.hpInvalid).append(m.mpInvalid)
+                    .append(',').append(j != null ? j[0] + "/" + j[1] : "-");
+        }
+        if (key.toString().equals(partyKey)) return;
+        partyKey = key.toString();
+        partyRow.removeAllViews();
         for (Party.Member m : v.party.members) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = dp(4);
-            partyRow.addView(memberRow(m, stale), lp);
+            partyRow.addView(memberRow(m, stale, jobs(jobsFrom, m.member)), lp);
         }
+    }
+
+    String partyKey;                                              // what the Party rows currently show
+    ZodiacBackground sky;
+
+    void clearPartyRows() {
+        partyRow.removeAllViews();
+        partyKey = null;
+    }
+
+    static String vitalKey(Party.Vital x) {
+        return x == null ? "-" : x.cur + "/" + x.max;
     }
 
     static String partyReason(ReceiverState.Family f) {
@@ -1157,7 +1187,22 @@ public class MainActivity extends Activity {
      * 0.16.0, for the narrow column: name and HP numbers on one line, the HP bar (amber below half, red below a
      * quarter, grey at KO), then MP. Status chips follow once the game script reports statuses.
      */
-    View memberRow(Party.Member m, boolean stale) {
+    /** The live build, with the same gates as the Equip tab (verified game build, live, fixtures only in fixture mode). */
+    Build liveBuild(ReceiverState.View v) {
+        Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
+        boolean ok = s != null && v.locationFamily.state == ReceiverState.FamilyState.LIVE
+                && (s.synthetic ? fixtureMode : Reveal.buildVerified(s.hello()));
+        return ok ? Build.parse(Json.obj(s.data, "build")) : null;
+    }
+
+    /** A member's jobs (0..11, licence board - 1), or null: guests and members without build data get no job icons. */
+    static int[] jobs(Build b, Integer member) {
+        if (b == null || member == null) return null;
+        for (Build.Member bm : b.members) if (bm.id == member) return new int[] { bm.job1, bm.job2 };
+        return null;
+    }
+
+    View memberRow(Party.Member m, boolean stale, int[] jobs) {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.VERTICAL);
         r.setPadding(dp(8), dp(3), dp(8), dp(4));
@@ -1179,6 +1224,22 @@ public class MainActivity extends Activity {
         r.addView(top);
         LinearLayout low = new LinearLayout(this);                // HP bar, then MP on the same line
         low.setGravity(Gravity.CENTER_VERTICAL);
+        // 0.16.0: job icons at the start of the bar line (the name keeps its full width). The six main members always
+        // get both slots, empty until the build data is in, so the bar never jumps when it comes and goes.
+        boolean main = m.member != null && m.member >= 0 && m.member < 6;
+        for (int k = 0; main && k < 2; k++) {
+            int j = jobs != null ? jobs[k] : -1;
+            int id = j >= 0 && j < 12 ? getResources().getIdentifier("ic_job_" + j, "drawable", getPackageName()) : 0;
+            android.widget.ImageView iv = new android.widget.ImageView(this);
+            if (id != 0) {
+                android.graphics.drawable.Drawable d = getDrawable(id).mutate();
+                d.setTint(ko ? DIM : Theme.GOLD);
+                iv.setImageDrawable(d);
+            }
+            LinearLayout.LayoutParams ilp = new LinearLayout.LayoutParams(dp(14), dp(14));
+            ilp.rightMargin = dp(k == 0 ? 2 : 6);
+            low.addView(iv, ilp);
+        }
         View hb = bar(m.hp, ko ? DIM : toneColor(Party.tone(m.hp), HP));
         hb.setLayoutParams(new LinearLayout.LayoutParams(0, dp(6), 1));
         low.addView(hb);

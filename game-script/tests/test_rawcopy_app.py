@@ -151,8 +151,10 @@ def run_suite(runtime, classes, java):
         app('beat', w.now())
         w.drive(3000)
         r, _ = run(w, app, ('DATA',), beat=False)
-        app('beat', w.now() - 60)
-        w.drive(5000)
+        w.mem[0x22C1F48] = 4
+        w.drive(32000)
+        w.mem[0x22C1F48] = 0
+        w.drive(3000)
         st = w.snapshot()['rawcopy']
         assert st.get('paused') == 'app_away' and st['job'] == 'dat-hb', st
         before = st['bytes']
@@ -192,7 +194,7 @@ def run_suite(runtime, classes, java):
         app = App(classes, java, base)
         w = World(runtime, tmp)
         w.lua.execute('''local o = io.open
-          io.open = function(p, m) if p:match("done%.txt$") and m and m:find("w") then return nil end return o(p, m) end''')
+          io.open = function(p, m) if p:match("done%.txt%.tmp$") and m and m:find("w") then return nil end return o(p, m) end''')
         app('start', 'nd')
         for _ in range(4):                                            # with its files alone the job waits for ever
             w.alive()

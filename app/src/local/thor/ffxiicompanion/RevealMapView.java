@@ -184,6 +184,7 @@ final class RevealMapView extends View {
 
     /** Marker in the current area's sheet pixels; null hides it. */
     void setMarker(Float px, Float py, boolean live) {
+        if (java.util.Objects.equals(px, markerPx) && java.util.Objects.equals(py, markerPy) && live == markerLive) return;
         markerPx = px;
         markerPy = py;
         markerLive = live;
@@ -202,6 +203,8 @@ final class RevealMapView extends View {
 
     /** masks: sheet file -> bitmap decoded with the given inSampleSize. A new region resets the full map's zoom. */
     void set(Regions.View v, List<Regions.Part> parts, Map<String, Bitmap> masks, int sample) {
+        // 0.16.0 (performance): the data refreshes every second; skip the rebuild and redraw when nothing drawn changed
+        if (sameAs(v, parts, masks, sample)) return;
         this.parts = parts != null ? parts : new ArrayList<>();
         this.links = v != null ? v.links : new ArrayList<>();
         this.exits = v != null ? v.exits : new ArrayList<>();
@@ -257,6 +260,25 @@ final class RevealMapView extends View {
             canvas.drawCircle(cx, cy, r, markerRing);
         }
         drawLabels(canvas, scale, ox, oy, d);
+    }
+
+    /** True when this would draw exactly what is shown now (same parts, explored cells, links, labels and symbols). */
+    private boolean sameAs(Regions.View v, List<Regions.Part> ps, Map<String, Bitmap> m, int smp) {
+        if (m != masks || smp != sample || ps == null || v == null || ps.size() != parts.size()) return false;
+        if (!java.util.Objects.equals(v.region, region) && interactive) return false;
+        if (v.links.size() != links.size() || v.exits.size() != exits.size() || v.dimmed.size() != dimmed.size()
+                || v.symbols.size() != shown.size()) return false;
+        for (int i = 0; i < ps.size(); i++) {
+            Regions.Part a = ps.get(i), b = parts.get(i);
+            if (a.focus != b.focus || a.x != b.x || a.y != b.y || a.sheet == null || b.sheet == null
+                    || !a.sheet.file.equals(b.sheet.file) || !java.util.Arrays.deepEquals(a.visible, b.visible)
+                    || !java.util.Arrays.deepEquals(a.revealed, b.revealed)) return false;
+        }
+        for (int i = 0; i < v.symbols.size(); i++) {
+            Regions.Shown a = v.symbols.get(i), b = shown.get(i);
+            if (a.type != b.type || a.x != b.x || a.y != b.y) return false;
+        }
+        return true;
     }
 
     /** The part's soft-edge alpha, or null when it has no edge (nothing or everything explored: no layer needed). */

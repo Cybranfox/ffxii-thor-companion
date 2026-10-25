@@ -98,6 +98,10 @@ final class Reveal {
         if (!screenVerifiedWidth(sh.width)) return Decision.hidden(mapId, "fog layout for " + sh.width + "-px maps not verified yet");
         if (stride < 1 || rows * stride > RECORD_BYTES) return Decision.hidden(mapId, "map size does not fit the fog record");
 
+        // 0.16.0: game script 0.17+ adds the area-you're-in progress (the game saves it only when you leave). Used only
+        // for this sheet, only when every gate passes, and never to show less than the saved record.
+        byte[] live = liveRecord(r, mapId, sh);
+        if (live != null) for (int i = 0; i < record.length && i < live.length; i++) record[i] |= live[i];
         boolean full = bundleFullyRevealed(s.hello());
         Decision d = new Decision();
         d.mapId = mapId;
@@ -118,6 +122,23 @@ final class Reveal {
         if (full) d.reason = "Bountiful Bundle: fully revealed maps (config file)";
         else if (d.shownTiles == 0) d.reason = "no explored areas recorded for this map yet";
         return d;
+    }
+
+    /**
+     * The live record (reveal.live, Core7 CONTRACT.md) when it may be used for this sheet: reveal.liveStatus ok, source live, the
+     * same map, dimensions equal to the atlas sheet, the game's stride rule, 32 bytes of hex. Anything else: null (the
+     * saved record is used as it is). The caller has already checked the saved family (contract, ok, stable, map).
+     */
+    static byte[] liveRecord(Map<String, Object> reveal, Integer mapId, Atlas.Sheet sh) {
+        Map<String, Object> live = Json.obj(reveal, "live");
+        if (live == null || mapId == null || sh == null || !"ok".equals(Json.str(reveal, "liveStatus"))) return null;
+        if (!"live".equals(Json.str(live, "source"))) return null;
+        Long map = Json.lng(live, "map"), w = Json.lng(live, "w"), h = Json.lng(live, "h"), stride = Json.lng(live, "stride");
+        if (map == null || map.intValue() != mapId || w == null || h == null || stride == null) return null;
+        if (w != sh.width || h != sh.height || stride != strideFor(sh.width) || stride < 1) return null;
+        if ((h / TILE) * stride > RECORD_BYTES) return null;
+        String hex = Json.str(live, "record");
+        return hex != null && hex.length() == RECORD_BYTES * 2 ? parseRecord(hex) : null;
     }
 
     static boolean buildVerified(Map<String, Object> hello) {
