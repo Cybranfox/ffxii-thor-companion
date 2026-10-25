@@ -166,10 +166,10 @@ final class LicencesView extends LinearLayout {
     }
 
     private TextView chip(String s, boolean on, View.OnClickListener l) {
-        TextView t = ui.text(s, 12, on ? MainActivity.BG : MainActivity.TEXT, true);
+        TextView t = ui.text(s, 12, MainActivity.TEXT, true);
         t.setSingleLine(true);
         t.setPadding(ui.dp(12), ui.dp(4), ui.dp(10), ui.dp(4));
-        t.setBackground(ui.round(on ? MainActivity.ACCENT : MainActivity.CARD, 12));
+        t.setBackground(ui.round(on ? Theme.MARK : MainActivity.CARD, 12));
         t.setOnClickListener(l);
         return t;
     }

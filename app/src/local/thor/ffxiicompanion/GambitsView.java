@@ -93,7 +93,7 @@ final class GambitsView extends LinearLayout {
         editBar.addView(pickRow);
         LinearLayout btns = new LinearLayout(c);
         btns.setPadding(0, dp(6), 0, 0);
-        editSend = button("Send to game", accent, bg);
+        editSend = button("Send to game", Theme.MARK, text);
         editToggle = button("Turn ON…", bg, text);
         editChange = button("Change…", bg, text);
         editCancel = button("Cancel", bg, text);
@@ -327,10 +327,10 @@ final class GambitsView extends LinearLayout {
             editToggle.setVisibility(GONE);
             editChange.setVisibility(GONE);
             pickRow.setVisibility(VISIBLE);
-            pickCond.setBackground(round(pickMode == 1 ? accent : bg, 14));
-            pickCond.setTextColor(pickMode == 1 ? bg : text);
-            pickAct.setBackground(round(pickMode == 2 ? accent : bg, 14));
-            pickAct.setTextColor(pickMode == 2 ? bg : text);
+            pickCond.setBackground(round(pickMode == 1 ? Theme.MARK : bg, 14));
+            pickCond.setTextColor(text);
+            pickAct.setBackground(round(pickMode == 2 ? Theme.MARK : bg, 14));
+            pickAct.setTextColor(text);
         } else if (p.confirmToggle) {
             editMsg.setText((p.turnOn ? "Turn ON  " : "Turn OFF  ") + p.where() + "\n" + now + tail);
             editSend.setText(p.turnOn ? "Turn ON in game" : "Turn OFF in game");
@@ -352,6 +352,9 @@ final class GambitsView extends LinearLayout {
         editBar.setVisibility(VISIBLE);
     }
 
+    /** 0.17.0: the set on screen (one at a time, as the game); -1 follows the set the game uses. Viewing never sends. */
+    private int viewedSet = -1;
+
     /** members null = unavailable (statusText explains). Rebuilds only when content or selection changed. */
     void show(List<Gambits.Member> members, Reference reference, String statusText, boolean live) {
         status.setText(statusText);
@@ -359,7 +362,7 @@ final class GambitsView extends LinearLayout {
         status.setVisibility(statusText == null || statusText.isEmpty() ? GONE : VISIBLE);
         tickApply(members);   // an apply in progress advances on every refresh, whatever is on screen
         String key = (members == null ? "none" : String.valueOf(signature(members))) + "|" + selected + "|" + (reference != null) + "|" + editAllowed + "|" + pickMode
-                + "|" + suggestMode + "|" + plansKey + "|" + applyStage + ":" + applyAt + ":" + applyId + ":" + applyMsg;
+                + "|" + suggestMode + "|" + viewedSet + "|" + plansKey + "|" + applyStage + ":" + applyAt + ":" + applyId + ":" + applyMsg;
         if (key.equals(lastKey)) return;
         lastKey = key;
         this.members = members;
@@ -374,21 +377,21 @@ final class GambitsView extends LinearLayout {
         for (Gambits.Member m : members) {
             TextView t = tv(m.name + (Gambits.MEMBER_VERIFIED[m.id] ? "" : "*"), 12, text, true);
             t.setSingleLine(true);
-            t.setPadding(dp(10), dp(4), dp(10), dp(4));
             boolean on = m.id == selected;
-            t.setBackground(round(on ? accent : card, 12));
-            t.setTextColor(on ? bg : text);
+            t.setPadding(on ? dp(14) : dp(10), dp(4), dp(10), dp(4));
+            t.setBackground(round(on ? Theme.MARK : card, 12));
+            t.setTextColor(text);
             final int id = m.id;
-            t.setOnClickListener(v -> { selected = id; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
+            t.setOnClickListener(v -> { selected = id; viewedSet = -1; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
             LayoutParams lp = new LayoutParams(-2, -2);
             lp.rightMargin = dp(6);
             chips.addView(t, lp);
         }
         if (plans != null) {   // 0.13.0: suggestions (read-only)
-            TextView sg = tv(suggestMode ? "✦ Suggested" : "✦ Suggest", 12, suggestMode ? bg : accent, true);
+            TextView sg = tv(suggestMode ? "✦ Suggested" : "✦ Suggest", 12, suggestMode ? text : accent, true);
             sg.setSingleLine(true);
-            sg.setPadding(dp(10), dp(4), dp(10), dp(4));
-            sg.setBackground(round(suggestMode ? accent : card, 12));
+            sg.setPadding(suggestMode ? dp(14) : dp(10), dp(4), dp(10), dp(4));
+            sg.setBackground(round(suggestMode ? Theme.MARK : card, 12));
             sg.setOnClickListener(v -> { suggestMode = !suggestMode; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
             chips.addView(sg, new LayoutParams(-2, -2));
         }
@@ -402,13 +405,14 @@ final class GambitsView extends LinearLayout {
             return;
         }
         showItemIssues(m);
-        int set = -1;
+        // 0.17.0: one set at a time, as the game's list; small I / II / III plates pick which set to look at
+        int sets = 0;
+        for (Gambits.Slot s : m.slots) sets = Math.max(sets, (s.index - 1) / Gambits.SLOTS + 1);
+        int view = viewedSet >= 0 && viewedSet < sets ? viewedSet : Math.max(0, Math.min(m.active, sets - 1));
+        if (sets > 1) rows.addView(setPlates(m, sets, view));
+        rows.addView(setHeader(m, view));
         for (Gambits.Slot s : m.slots) {
-            int thisSet = (s.index - 1) / Gambits.SLOTS;
-            if (thisSet != set) {
-                set = thisSet;
-                rows.addView(setHeader(m, set));
-            }
+            if ((s.index - 1) / Gambits.SLOTS != view) continue;
             LinearLayout r = row(s);
             if (editAllowed && GambitEdit.editable(m, s)) {
                 final Gambits.Member fm = m;
@@ -440,7 +444,7 @@ final class GambitsView extends LinearLayout {
             String fixText = is.fix >= 0 ? "Swap to " + actionLabel(is.fix) : "Turn it off";
             box.addView(tv(fixText, 12, dim, false));
             if (editAllowed && sentId == null && GambitEdit.editable(m, s)) {
-                TextView go = button(fixText + "…", accent, bg);
+                TextView go = button(fixText + "…", Theme.MARK, text);
                 final Gambits.Member fm = m;
                 final int fix = is.fix;
                 go.setOnClickListener(v -> {
@@ -483,9 +487,9 @@ final class GambitsView extends LinearLayout {
         for (String[] n : named) {
             int id = Integer.parseInt(n[1]);
             LinearLayout r = new LinearLayout(getContext());
-            r.setPadding(dp(10), dp(7), dp(10), dp(7));
-            r.setBackground(round(id == current ? accent : card, 6));
-            TextView t = tv(n[0], 14, id == current ? bg : text, id == current);
+            r.setPadding(id == current ? dp(14) : dp(10), dp(7), dp(10), dp(7));
+            r.setBackground(round(id == current ? Theme.MARK : card, 6));
+            TextView t = tv(n[0], 14, text, id == current);
             t.setSingleLine(true);
             t.setEllipsize(TextUtils.TruncateAt.END);
             r.addView(t, new LayoutParams(0, -2, 1));
@@ -506,19 +510,24 @@ final class GambitsView extends LinearLayout {
     private LinearLayout row(Gambits.Slot s) {
         LinearLayout r = new LinearLayout(getContext());
         r.setGravity(Gravity.CENTER_VERTICAL);
-        r.setPadding(dp(8), dp(5), dp(8), dp(5));
-        r.setBackground(round(card, 6));
-        TextView n = tv(String.valueOf((s.index - 1) % Gambits.SLOTS + 1), 12, dim, true);
-        n.setMinWidth(dp(22));
+        // 0.17.0: the game's gambit capsule: blue for ally/self rules, brown for foe rules, grey when OFF
+        String cond = Gambits.condition(s.condition, reference);
+        int kind = !s.on ? 2 : cond.startsWith("Foe") ? 1 : 0;
+        r.setPadding(dp(6), dp(1), dp(14), dp(1));
+        r.setBackground(Theme.capsule(kind, density));
+        TextView n = tv(String.valueOf((s.index - 1) % Gambits.SLOTS + 1), 20, 0x99C9CDD2, true);
+        n.setTypeface(android.graphics.Typeface.create(Theme.bodyMedium, android.graphics.Typeface.ITALIC));
+        n.setGravity(Gravity.CENTER);
+        n.setMinWidth(dp(26));
         r.addView(n);
-        TextView on = tv(s.on ? "ON" : "OFF", 11, s.on ? good : dim, true);
+        TextView on = tv(s.on ? "ON" : "OFF", 12, s.on ? Theme.ON_GOLD : dim, true);
         on.setMinWidth(dp(34));
         r.addView(on);
-        TextView c = tv(Gambits.condition(s.condition, reference), 13, s.on ? text : dim, false);
+        TextView c = tv(cond, 14, s.on ? text : dim, false);
         c.setSingleLine(true);
         c.setEllipsize(TextUtils.TruncateAt.END);
         r.addView(c, new LayoutParams(0, -2, 1.2f));
-        TextView a = tv("▸ " + actionLabel(s.action), 13, s.on ? text : dim, true);
+        TextView a = tv("\u25b8 " + actionLabel(s.action), 14, s.on ? text : dim, false);
         a.setSingleLine(true);
         a.setEllipsize(TextUtils.TruncateAt.END);
         r.addView(a, new LayoutParams(0, -2, 1f));
@@ -621,7 +630,7 @@ final class GambitsView extends LinearLayout {
             box.addView(tv(sb.toString(), 13, text, false));
             LinearLayout b = new LinearLayout(getContext());
             b.setPadding(0, dp(6), 0, 0);
-            TextView go = button("Apply " + applySteps.size() + " change(s)", accent, bg);
+            TextView go = button("Apply " + applySteps.size() + " change(s)", Theme.MARK, text);
             go.setOnClickListener(v -> { applyStage = 2; applyAt = 0; applyId = null; lastKey = null; tickApply(members); show(members, reference, status.getText().toString(), true); });
             TextView back = button("Back", bg, text);
             back.setOnClickListener(v -> { applyStage = 0; applySteps = null; lastKey = null; show(members, reference, status.getText().toString(), true); });
@@ -661,7 +670,8 @@ final class GambitsView extends LinearLayout {
         TextView h = tv("Suggested for " + m.name + " · " + p.jobs + " · " + p.role, 13, accent, true);
         h.setPadding(dp(4), dp(4), dp(4), 0);
         rows.addView(h);
-        TextView n = tv("Built from guide rules (revive, heal, status, Steal, buffs, weaknesses, attacks) using only gambits you own "
+        TextView n = tv("Ordered by how gambits run, top to bottom, first match wins (revive, heal, status, Steal, buffs, weaknesses, "
+                + "attacks), using only gambits you own "
                 + "and abilities " + m.name + " owns and is licensed for (probe). Nothing is sent unless you apply and confirm.", 11, dim, false);
         n.setPadding(dp(4), dp(2), dp(4), dp(6));
         rows.addView(n);
@@ -674,26 +684,30 @@ final class GambitsView extends LinearLayout {
             for (Gambits.Slot c : m.slots) if (c.index <= Gambits.SLOTS && c.condition == s.condition && c.action == s.action) have = true;
             LinearLayout r = new LinearLayout(getContext());
             r.setOrientation(VERTICAL);
-            r.setPadding(dp(8), dp(5), dp(8), dp(5));
-            r.setBackground(round(card, 6));
+            r.setPadding(0, 0, 0, dp(2));
             LinearLayout top = new LinearLayout(getContext());
             top.setGravity(Gravity.CENTER_VERTICAL);
-            TextView num = tv(String.valueOf(i), 12, dim, true);
-            num.setMinWidth(dp(22));
+            String sc = Gambits.condition(s.condition, reference);
+            top.setPadding(dp(6), dp(1), dp(14), dp(1));
+            top.setBackground(Theme.capsule(sc.startsWith("Foe") ? 1 : 0, density));   // 0.17.0: the game's capsule
+            TextView num = tv(String.valueOf(i), 20, 0x99C9CDD2, true);
+            num.setTypeface(android.graphics.Typeface.create(Theme.bodyMedium, android.graphics.Typeface.ITALIC));
+            num.setGravity(Gravity.CENTER);
+            num.setMinWidth(dp(26));
             top.addView(num);
-            TextView c = tv(Gambits.condition(s.condition, reference), 13, text, false);
+            TextView c = tv(sc, 14, text, false);
             c.setSingleLine(true);
             c.setEllipsize(TextUtils.TruncateAt.END);
             top.addView(c, new LayoutParams(0, -2, 1.2f));
-            TextView a = tv("▸ " + actionLabel(s.action), 13, text, true);
+            TextView a = tv("▸ " + actionLabel(s.action), 14, text, false);
             a.setSingleLine(true);
             a.setEllipsize(TextUtils.TruncateAt.END);
             top.addView(a, new LayoutParams(0, -2, 1f));
-            TextView mk = tv(have ? "in Set I" : "new", 11, have ? good : warn, true);
+            TextView mk = tv(have ? "in Set I" : "new", 11, have ? text : Theme.ON_GOLD, true);
             top.addView(mk);
             r.addView(top);
             TextView why = tv(s.reason, 11, dim, false);
-            why.setPadding(dp(22), 0, 0, 0);
+            why.setPadding(dp(36), dp(1), 0, dp(3));
             r.addView(why);
             if (canApply(m) && applyStage == 0 && slotIdx < Gambits.SLOTS) r.setOnClickListener(v -> startConfirm(m, ApplyPlan.one(m, plan, slotIdx)));
             LayoutParams lp = new LayoutParams(-1, -2);
@@ -707,6 +721,26 @@ final class GambitsView extends LinearLayout {
         for (Gambits.Member m : ms) {
             h = 31 * h + m.active;   // 0.10.0: a set switch redraws the headers
             for (Gambits.Slot s : m.slots) h = 31 * h + (s.index * 7 + s.condition * 13 + s.action * 17 + (s.on ? 1 : 0));
+        }
+        return h;
+    }
+
+    /** The I / II / III plates: tap to look at a set (only looks; "Use this set…" is still the separate, confirmed step). */
+    private android.view.View setPlates(Gambits.Member m, int sets, int view) {
+        LinearLayout h = new LinearLayout(getContext());
+        h.setPadding(0, dp(6), 0, 0);
+        for (int k = 0; k < sets; k++) {
+            boolean on = k == view;
+            TextView t = tv((k == 0 ? "I" : k == 1 ? "II" : "III") + (m.active == k ? " \u00b7" : ""), 13, on ? text : dim, true);
+            t.setGravity(android.view.Gravity.CENTER);
+            t.setMinWidth(dp(56));
+            t.setPadding(dp(12), dp(5), dp(12), dp(5));
+            t.setBackground(round(on ? Theme.MARK : card, 6));
+            final int target = k;
+            t.setOnClickListener(v -> { viewedSet = target; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
+            LayoutParams lp = new LayoutParams(-2, -2);
+            lp.rightMargin = dp(6);
+            h.addView(t, lp);
         }
         return h;
     }

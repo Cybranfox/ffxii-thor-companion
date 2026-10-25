@@ -150,7 +150,7 @@ final class GambitPlan {
             add(s, conds, ALLY_ANY, c.contains(haste) ? haste : -1, "Keep Haste up (the game skips allies that already have it)");
             add(s, conds, ALLY_ANY, c.contains(protect) ? protect : -1, "Keep Protect up");
             add(s, conds, ALLY_ANY, c.contains(shell) ? shell : -1, "Keep Shell up");
-            if (spells(c, ref) >= 2) {   // casters: exploit weaknesses (guides: specific conditions above general ones)
+            if (spells(c, ref) >= 2) {   // casters: exploit weaknesses (specific conditions above general ones: the first match wins)
                 for (Object[] e : byLiveWeakness(liveWeak)) {
                     int sp = -1;
                     for (String n : (String[]) e[1]) { int a = action(ref, n); if (a >= 0 && c.contains(a)) { sp = a; break; } }

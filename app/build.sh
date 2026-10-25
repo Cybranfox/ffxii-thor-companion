@@ -22,7 +22,8 @@ rm -rf build && mkdir -p build/classes build/dex
 # The loader stub, the signed game script and the container installer ride along as assets (written to
 # Download/FFXII_companion/install). Releases pass INSTALL_STAGE (scripts/release.py: stub + signed core + signature).
 # Development/CI builds carry the unsigned core only; a real loader refuses it, which is the point.
-mkdir -p build/assets/install
+mkdir -p build/assets/install build/assets/fonts
+cp assets/fonts/* build/assets/fonts/            # 0.17.0: OFL fonts (Roboto, Michroma) with their licence files
 if [ -n "${INSTALL_STAGE:-}" ]; then
   cp "$INSTALL_STAGE"/* build/assets/install/
 else

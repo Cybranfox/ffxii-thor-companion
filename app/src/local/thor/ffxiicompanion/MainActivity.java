@@ -179,6 +179,7 @@ public class MainActivity extends Activity {
         }, "data-owner"));
         seenInstalls = data.installs();
         seenFailures = data.failures();
+        Theme.init(this);
         setContentView(buildUi());
     }
 
@@ -226,26 +227,42 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         frame.addView(root, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        root.setPadding(dp(12), dp(8), dp(12), dp(8));
+        root.setPadding(dp(12), 0, dp(12), 0);
+        root.setClipToPadding(false);                       // 0.17.0: the black bars run edge to edge
 
+        // 0.17.0, the game's top black bar: a one-line help sentence with a small square mark, the live state on the
+        // right; then the page title, small, at the left (the game names the open menu there).
+        LinearLayout topBar = new LinearLayout(this);
+        topBar.setOrientation(LinearLayout.VERTICAL);
+        topBar.setBackgroundColor(0xFF000000);
+        topBar.setPadding(dp(12), dp(6), dp(12), dp(4));
+        LinearLayout.LayoutParams tbp = new LinearLayout.LayoutParams(-1, -2);
+        tbp.leftMargin = -dp(12);
+        tbp.rightMargin = -dp(12);
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
-        status = text("…", 15, TEXT, true);
-        status.setPadding(dp(10), dp(3), dp(10), dp(3));
+        TextView mark = text("i", 10, 0xFF000000, true);
+        mark.setGravity(Gravity.CENTER);
+        mark.setShadowLayer(0, 0, 0, 0);
+        mark.setBackground(round(TEXT, 1));
+        header.addView(mark, new LinearLayout.LayoutParams(dp(12), dp(12)));
+        helpLine = text("", 13, TEXT, false);
+        oneLine(helpLine);
+        helpLine.setPadding(dp(7), 0, dp(8), 0);
+        header.addView(helpLine, new LinearLayout.LayoutParams(0, -2, 1));
+        status = text("…", 13, TEXT, false);
         status.setSingleLine(true);
         header.addView(status);
-        title = text(fixtureMode ? "FFXII Companion · fixture mode" : "FFXII Companion", 15, Theme.GOLD, true);
-        heading(title);
+        topBar.addView(header);
+        title = text(fixtureMode ? "Status · fixture mode" : "Status", 15, TEXT, false);
         oneLine(title);
-        title.setPadding(dp(10), 0, 0, 0);
-        header.addView(title, new LinearLayout.LayoutParams(0, -2, 1));
-        root.addView(header);
+        title.setPadding(dp(4), dp(5), 0, 0);
+        topBar.addView(title);
+        root.addView(topBar, tbp);
 
-        statusDetail = text("", 12, DIM, false);
-        statusDetail.setMaxLines(1);                     // 0.16.0: one line; the Setup card carries guidance
+        statusDetail = text("", 12, DIM, false);        // 0.17.0: shown in the black footer bar (see below)
+        statusDetail.setMaxLines(2);
         statusDetail.setEllipsize(TextUtils.TruncateAt.END);
-        statusDetail.setPadding(0, dp(3), 0, dp(4));
-        root.addView(statusDetail);
 
         banner = text("", 12, BG, true);
         oneLine(banner);
@@ -264,24 +281,30 @@ public class MainActivity extends Activity {
         });
         root.addView(grant);
 
-        // Tabs: live companion first; reference browsers load their bundle on first use.
+        // 0.17.0: the pages as a command list down the left, as the game's main menu (one tap to any page; the glove
+        // marks the open one); the page fills the rest. Reference browsers load their bundle on first use.
         LinearLayout tabRow = new LinearLayout(this);
-        tabRow.setPadding(0, dp(2), 0, dp(6));
+        tabRow.setOrientation(LinearLayout.VERTICAL);
+        tabRow.setPadding(0, dp(10), dp(6), dp(6));
         String[] names = {"Status", "Gambits", "Equip", "Bestiary", "Licenses"};   // 0.22.0: the game's menu words
         tabNames = names;
         tabs = new TextView[names.length];
         for (int i = 0; i < names.length; i++) {
             final int idx = i;
-            TextView t = text(names[i], 13, TEXT, true);
-            t.setGravity(Gravity.CENTER);
-            t.setPadding(dp(8), dp(5), dp(8), dp(5));
+            TextView t = text(names[i], 15, TEXT, false);
+            oneLine(t);
+            t.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
+            t.setPadding(dp(28), 0, dp(4), 0);                  // room for the glove, the same on every line
             t.setOnClickListener(v -> selectTab(idx));
-            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(0, -2, 1);
-            lp.rightMargin = i < names.length - 1 ? dp(6) : 0;
-            tabRow.addView(t, lp);
+            tabRow.addView(t, new LinearLayout.LayoutParams(-1, dp(48)));   // a full touch target per command
             tabs[i] = t;
         }
-        root.addView(tabRow);
+        LinearLayout mainRow = new LinearLayout(this);
+        LinearLayout content = new LinearLayout(this);
+        content.setOrientation(LinearLayout.VERTICAL);
+        mainRow.addView(tabRow, new LinearLayout.LayoutParams(dp(100), -1));
+        mainRow.addView(content, new LinearLayout.LayoutParams(0, -1, 1));
+        root.addView(mainRow, new LinearLayout.LayoutParams(-1, 0, 1));
         tabBar = tabRow;
 
         ScrollView scroll = new ScrollView(this);
@@ -290,24 +313,33 @@ public class MainActivity extends Activity {
         body.setOrientation(LinearLayout.VERTICAL);
         liveBody = body;
         scroll.addView(body);
-        root.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(scroll, new LinearLayout.LayoutParams(-1, 0, 1));
         gambitsView = new GambitsView(this, TEXT, DIM, ACCENT, CARD, BG, GOOD, WARN);
         gambitsView.setVisibility(View.GONE);
-        root.addView(gambitsView, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(gambitsView, new LinearLayout.LayoutParams(-1, 0, 1));
         gearView = new ReferenceView(this, TEXT, DIM, ACCENT, CARD, BG);
         gearView.setVisibility(View.GONE);
-        root.addView(gearView, new LinearLayout.LayoutParams(-1, 0, 1));
-        bestiaryView = new ReferenceView(this, TEXT, DIM, ACCENT, CARD, BG);
+        content.addView(gearView, new LinearLayout.LayoutParams(-1, 0, 1));
+        bestiaryView = new ReferenceView(this, Theme.INK, Theme.INK_DIM, Theme.INK_ACCENT, CARD, BG, true);   // 0.17.0: parchment
         bestiaryView.setVisibility(View.GONE);
-        root.addView(bestiaryView, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(bestiaryView, new LinearLayout.LayoutParams(-1, 0, 1));
         licencesView = new LicencesView(this);
         licencesView.setVisibility(View.GONE);
-        root.addView(licencesView, new LinearLayout.LayoutParams(-1, 0, 1));
-        root.addView(buildMapPage(), new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(licencesView, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(buildMapPage(), new LinearLayout.LayoutParams(-1, 0, 1));
         referenceMissing = text("", 13, DIM, false);
         referenceMissing.setPadding(dp(6), dp(10), dp(6), dp(10));
         referenceMissing.setVisibility(View.GONE);
-        root.addView(referenceMissing, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(referenceMissing, new LinearLayout.LayoutParams(-1, 0, 1));
+        // 0.17.0, the game's bottom black bar: what's going on in a line or two (the game shows the selection's details)
+        LinearLayout footBar = new LinearLayout(this);
+        footBar.setBackgroundColor(0xFF000000);
+        footBar.setPadding(dp(16), dp(6), dp(16), dp(8));
+        footBar.addView(statusDetail, new LinearLayout.LayoutParams(-1, -2));
+        LinearLayout.LayoutParams fbp = new LinearLayout.LayoutParams(-1, -2);
+        fbp.leftMargin = -dp(12);
+        fbp.rightMargin = -dp(12);
+        root.addView(footBar, fbp);
 
         // 0.16.0 Setup: five ordered checks, one action for the first problem (SetupFlow); shown on first run, when a
         // durable problem comes back, or from Details.
@@ -332,8 +364,8 @@ public class MainActivity extends Activity {
         leftCol.setOrientation(LinearLayout.VERTICAL);
         LinearLayout rightCol = new LinearLayout(this);
         rightCol.setOrientation(LinearLayout.VERTICAL);
-        statusRow.addView(leftCol, new LinearLayout.LayoutParams(0, -2, 45));
-        statusRow.addView(rightCol, new LinearLayout.LayoutParams(0, -2, 55));
+        statusRow.addView(leftCol, new LinearLayout.LayoutParams(0, -2, 56));
+        statusRow.addView(rightCol, new LinearLayout.LayoutParams(0, -2, 44));
         body.addView(statusRow, new LinearLayout.LayoutParams(-1, -2));
 
         // Location: area name large on one line, then where from / ids.
@@ -538,8 +570,8 @@ public class MainActivity extends Activity {
             TextView c = (TextView) optionsRow.getChildAt(i);
             boolean on = option((String) c.getTag());
             c.setText((on ? "\u2713 " : "") + names[i]);
-            c.setBackground(round(on ? ACCENT : CARD, 14));
-            c.setTextColor(on ? BG : DIM);
+            c.setBackground(round(on ? Theme.MARK : CARD, 14));
+            c.setTextColor(on ? TEXT : DIM);
         }
     }
 
@@ -602,32 +634,40 @@ public class MainActivity extends Activity {
     }
 
     TextView cardHeading(String s) {
-        TextView h = text(s, 11, ACCENT, true);
+        TextView h = text(s, 11, Theme.HEAD, true);
         heading(h);
         return h;
     }
 
-    /** 0.21.0: headings in the device serif, letter-spaced, like FFXII's menu titles (no game font is used). */
+    /** 0.17.0: section headings as the game's: small, upper case, letter-spaced, dim blue-grey sans (an OFL font). */
     static void heading(TextView t) {
-        t.setTypeface(Typeface.create(Typeface.SERIF, Typeface.BOLD));
+        t.setTypeface(Theme.bodyMedium);
+        t.setTextColor(Theme.HEAD);
+        t.setTextSize(10);
         t.setLetterSpacing(0.08f);
+        t.setAllCaps(true);
     }
 
     void styleTabs() {
+        if (title != null && tabNames != null) title.setText(fixtureMode ? tabNames[tab] + " \u00b7 fixture mode" : tabNames[tab]);
+        if (helpLine != null) helpLine.setText(PAGE_HELP[Math.min(tab, PAGE_HELP.length - 1)]);
         for (int i = 0; i < tabs.length; i++) {
-            tabs[i].setBackground(round(i == tab ? ACCENT : CARD, 14));
-            tabs[i].setTextColor(i == tab ? BG : TEXT);
-            // 0.16.0: an icon beside the word, never instead of it; inline so the pair stays centred
-            android.graphics.drawable.Drawable d = tabIcon(i, i == tab ? BG : Theme.GOLD);
-            if (d == null) { tabs[i].setText(tabNames[i]); continue; }
-            android.text.SpannableString sp = new android.text.SpannableString("\u00a0 " + tabNames[i]);
-            sp.setSpan(new android.text.style.ImageSpan(d, android.text.style.DynamicDrawableSpan.ALIGN_CENTER), 0, 1,
-                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-            tabs[i].setText(sp);
+            // 0.17.0: plain words; the open page gets the game's olive wash
+            // 0.17.0: plain words as the game's menu; the open page gets the wash and the glove (the one cursor)
+            tabs[i].setBackground(i == tab ? round(ACCENT, 0) : null);
+            tabs[i].setTextColor(i == tab ? TEXT : DIM);
         }
     }
 
     String[] tabNames;
+    TextView helpLine, footer;
+    /** 0.17.0: the top bar's help sentence per page, as the game explains each menu. */
+    static final String[] PAGE_HELP = {
+            "Your party, where you are and what you're fighting.",
+            "Each character's gambits, and a suggested set.",
+            "Each character's equipment, and what Optimize would change.",
+            "Monsters you can look up, by area.",
+            "License boards: what's owned and what you can buy."};
     static final String[] TAB_ICONS = {"ic_tab_status", "ic_tab_gambits", "ic_tab_equip", "ic_tab_bestiary", "ic_tab_licences"};
 
     /** 0.16.0: the tab's line icon (res/drawable, original art), tinted; null if it's missing (the word still shows). */
@@ -922,8 +962,8 @@ public class MainActivity extends Activity {
     LinearLayout cardShell() {
         LinearLayout c = new LinearLayout(this);
         c.setOrientation(LinearLayout.VERTICAL);
-        c.setPadding(dp(10), dp(6), dp(10), dp(8));
-        c.setBackground(round(CARD, 8));
+        c.setPadding(dp(6), dp(7), dp(6), dp(8));
+        c.setBackground(Theme.section(dp(1)));                      // 0.17.0: no box, a hairline (the game's way)
         return c;
     }
 
@@ -971,9 +1011,8 @@ public class MainActivity extends Activity {
     }
 
     void setStatus(String label, int color, String detail) {
-        status.setText(label);
-        status.setBackground(round(color, 14));
-        status.setTextColor(BG);
+        status.setText("\u25c6 " + label);                        // 0.17.0: a small coloured diamond, no pill
+        status.setTextColor(color);
         statusDetail.setText(detail);
         statusDetail.setVisibility(detail == null || detail.isEmpty() ? View.GONE : View.VISIBLE);
     }
@@ -1214,8 +1253,8 @@ public class MainActivity extends Activity {
     View memberRow(Party.Member m, boolean stale, int[] jobs) {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.VERTICAL);
-        r.setPadding(dp(8), dp(2), dp(8), dp(3));
-        r.setBackground(round(TRACK, 6));
+        r.setPadding(dp(4), dp(2), dp(4), dp(2));
+        r.setBackground(Theme.section(dp(1)));                  // 0.17.0: rows on the band, a hairline between them
         r.setAlpha(stale ? 0.55f : 1f);
         boolean ko = m.ko != null ? m.ko : Party.tone(m.hp) == 3;   // the game script's flag wins; HP 0 only without it
 
@@ -1226,16 +1265,25 @@ public class MainActivity extends Activity {
         TextView n = text((m.leader ? "★ " : "") + (name != null ? name : "Unknown") + tags, 15, ko ? DIM : TEXT, true);
         oneLine(n);
         top.addView(n, new LinearLayout.LayoutParams(0, -2, 1));
-        TextView hp = text(m.hp != null ? num(m.hp.cur) + " / " + num(m.hp.max) : m.hpInvalid ? "HP invalid" : "HP —", 15,
-                m.hp != null ? TEXT : DIM, false);
+        // 0.17.0: as the game writes it, current big and the max smaller after the slash ("2753/2828")
+        TextView hp = text("", 15, m.hp != null ? TEXT : DIM, false);
+        hp.setText(m.hp != null ? vitalText(m.hp, ko ? DIM : TEXT) : m.hpInvalid ? "HP invalid" : "HP \u2014");
         oneLine(hp);
+        if (m.hp != null) {                                     // a thin HP line under the number, as the game's party list
+            hp.setBackground(hpLine(m.hp, ko ? DIM : toneColor(Party.tone(m.hp), HP)));
+            hp.setPadding(0, 0, 0, dp(3));
+        }
         top.addView(hp);
+        // 0.17.0: MP on the same line as HP, as the game's party list ("2753/2828 262/262")
+        TextView mp = text("", 13, m.mp != null ? TEXT : DIM, false);
+        mp.setText(m.mp != null ? vitalText(m.mp, ko ? DIM : TEXT) : m.mpInvalid ? "MP invalid" : "MP \u2014");
+        oneLine(mp);
+        mp.setPadding(dp(8), 0, 0, 0);
+        top.addView(mp);
         r.addView(top);
-        // 0.16.0, compact so four rows fit: job icons, HP bar and MP on one line, then the status chips (small, full width,
-        // only when there are any).
+        // Second line: job icons, then the status effects as coloured words (bad first).
         LinearLayout low = new LinearLayout(this);
         low.setGravity(Gravity.CENTER_VERTICAL);
-        // Job icons first. The six main members always get both slots, empty until the build data is in, so nothing jumps.
         boolean main = m.member != null && m.member >= 0 && m.member < 6;
         for (int k = 0; main && k < 2; k++) {
             int j = jobs != null ? jobs[k] : -1;
@@ -1250,36 +1298,52 @@ public class MainActivity extends Activity {
             ilp.rightMargin = dp(k == 0 ? 2 : 6);
             low.addView(iv, ilp);
         }
-        View hb = bar(m.hp, ko ? DIM : toneColor(Party.tone(m.hp), HP));
-        hb.setLayoutParams(new LinearLayout.LayoutParams(0, dp(6), 1));
-        low.addView(hb);
-        TextView mp = text(m.mp != null ? "MP " + num(m.mp.cur) + "/" + num(m.mp.max) : m.mpInvalid ? "MP invalid" : "MP \u2014", 12,
-                m.mp != null ? MP : DIM, false);
-        oneLine(mp);
-        mp.setPadding(dp(8), 0, 0, 0);
-        mp.setGravity(Gravity.END);
-        mp.setMinWidth(dp(86));                                  // same bar length on every row
-        low.addView(mp);
-        r.addView(low);
-        // Status chips (game script 0.16+): bad effects filled red, buffs outlined blue; the names are the game's.
         List<Party.Chip> chips = Party.chips(m.status, this::loadReference);
-        if (!chips.isEmpty()) {
-            android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
-            float density = getResources().getDisplayMetrics().density;
-            for (Party.Chip c : chips) {
-                int s0 = sb.length();
-                sb.append(c.name);
-                sb.setSpan(new ChipSpan(c.adverse ? BAD : ACCENT, BG, c.adverse ? ChipSpan.Style.FILL : ChipSpan.Style.OUTLINE,
-                        density), s0, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-                sb.append(" ");
-            }
-            TextView st = text("", 10, TEXT, false);
-            st.setText(sb);
-            st.setLineSpacing(dp(2), 1f);
-            st.setPadding(0, dp(1), 0, 0);
-            r.addView(st);
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
+        for (Party.Chip c : chips) {
+            int col = c.adverse ? 0xFFE09AA4 : 0xFF91C0D7, s0 = sb.length();
+            sb.append("\u25cf ").append(c.name);
+            sb.setSpan(new android.text.style.ForegroundColorSpan(col), s0, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.setSpan(new android.text.style.RelativeSizeSpan(0.75f), s0, s0 + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            sb.append("  ");
         }
+        TextView st = text("", 12, TEXT, false);
+        st.setText(sb);
+        st.setMaxLines(2);
+        st.setEllipsize(TextUtils.TruncateAt.END);
+        low.addView(st, new LinearLayout.LayoutParams(0, -2, 1));
+        r.addView(low);
         return r;
+    }
+
+    /** 0.17.0: "2753/2828" as the game prints it: the current value full size, "/max" smaller and a little dimmer. */
+    CharSequence vitalText(Party.Vital v, int color) {
+        android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder(String.valueOf(v.cur));   // no comma, as the game
+        int s0 = sb.length();
+        sb.append("/").append(String.valueOf(v.max));
+        sb.setSpan(new android.text.style.RelativeSizeSpan(0.72f), s0, sb.length(), android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new android.text.style.ForegroundColorSpan((color & 0x00FFFFFF) | 0xC0000000), s0, sb.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        return sb;
+    }
+
+    /** 0.17.0: the HP line drawn along the bottom of the number: the filled part in colour on a dark track. */
+    android.graphics.drawable.Drawable hpLine(Party.Vital v, int color) {
+        final float frac = v.max > 0 ? Math.max(0f, Math.min(1f, v.cur / (float) v.max)) : 0f;
+        final float th = Math.max(2f, getResources().getDisplayMetrics().density * 1.4f);
+        return new android.graphics.drawable.Drawable() {
+            final android.graphics.Paint p = new android.graphics.Paint();
+            @Override public void draw(android.graphics.Canvas c) {
+                android.graphics.Rect r = getBounds();
+                p.setColor(0xFF0B1420);
+                c.drawRect(r.left, r.bottom - th, r.right, r.bottom, p);
+                p.setColor(color);
+                c.drawRect(r.left, r.bottom - th, r.left + r.width() * frac, r.bottom, p);
+            }
+            @Override public void setAlpha(int a) { }
+            @Override public void setColorFilter(android.graphics.ColorFilter cf) { }
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        };
     }
 
     /** A thin bar for a vital; an empty bar stays visible on the darker track. */

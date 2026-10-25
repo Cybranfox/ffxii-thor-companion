@@ -61,10 +61,53 @@ final class ZodiacBackground extends View {
 
     @Override protected void onSizeChanged(int nw, int nh, int ow, int oh) {
         w = nw; h = nh;
+        smoke = null;
         bg.setShader(new LinearGradient(0, 0, 0, h, Theme.BG, Theme.BG2, Shader.TileMode.CLAMP));
     }
 
+    // 0.17.0: the game's menus sit on a blurred, darkened scene. We can't show the scene, so: a dark slate band with
+    // slow-drifting soft smoke (three cached radial glows moved by a matrix) and a faint vignette. It keeps animating
+    // lightly on purpose (a still bottom screen hurt FFXII's frame pacing, Perf_Results_2026-10-25.md).
+    private RadialGradient[] smoke;
+    private RadialGradient vignette;
+    private final android.graphics.Matrix m = new android.graphics.Matrix();
+    private final Paint smokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+
+    private void drawSmoke(Canvas c) {
+        if (smoke == null) {
+            bg.setShader(new LinearGradient(0, 0, w, 0, new int[]{0xFF0A1824, 0xFF29333C, 0xFF31322B}, null, Shader.TileMode.CLAMP));
+            float r = Math.max(w, h) * 0.55f;
+            smoke = new RadialGradient[]{
+                    new RadialGradient(0, 0, r, 0x2A8FA3B0, 0x00000000, Shader.TileMode.CLAMP),
+                    new RadialGradient(0, 0, r * 0.8f, 0x1EB0A890, 0x00000000, Shader.TileMode.CLAMP),
+                    new RadialGradient(0, 0, r * 0.7f, 0x22000000, 0x00000000, Shader.TileMode.CLAMP)};
+            vignette = new RadialGradient(w / 2f, h / 2f, Math.max(w, h) * 0.75f,
+                    new int[]{0x00000000, 0x00000000, 0x99000000}, new float[]{0f, 0.55f, 1f}, Shader.TileMode.CLAMP);
+        }
+        c.drawRect(0, 0, w, h, bg);
+        // One 72 s loop; every glow moves at a whole multiple of it, so nothing jumps when the loop restarts.
+        double t = (android.os.SystemClock.uptimeMillis() % 72000L) / 72000.0 * Math.PI * 2;
+        for (int i = 0; i < smoke.length; i++) {
+            float x = i == 0 ? 0.30f + 0.12f * (float) Math.sin(3 * t) : i == 1 ? 0.72f + 0.10f * (float) Math.cos(2 * t)
+                    : 0.55f + 0.15f * (float) Math.sin(t + 1);
+            float y = i == 0 ? 0.45f + 0.10f * (float) Math.cos(2 * t) : i == 1 ? 0.60f + 0.12f * (float) Math.sin(3 * t)
+                    : 0.30f + 0.08f * (float) Math.cos(3 * t);
+            m.setTranslate(x * w, y * h);
+            smoke[i].setLocalMatrix(m);
+            smokePaint.setShader(smoke[i]);
+            c.drawRect(0, 0, w, h, smokePaint);
+        }
+        smokePaint.setShader(vignette);
+        c.drawRect(0, 0, w, h, smokePaint);
+    }
+
     @Override protected void onDraw(Canvas c) {
+        if (Theme.GAME_LOOK) {
+            drawSmoke(c);
+            long nowMs = System.currentTimeMillis();
+            if (nowMs - lastFrame >= 50) { lastFrame = nowMs; postInvalidateDelayed(50); } else postInvalidateDelayed(50 - (nowMs - lastFrame));
+            return;
+        }
         float t = Theme.phase;
         long now = System.currentTimeMillis();
         c.drawRect(0, 0, w, h, bg);

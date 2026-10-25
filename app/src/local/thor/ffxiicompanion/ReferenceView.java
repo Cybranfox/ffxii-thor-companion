@@ -38,9 +38,21 @@ final class ReferenceView extends LinearLayout {
     private String filter;
     private List<Reference.Entry> shown = new ArrayList<>();
 
+    private final boolean paper;                         // 0.17.0: the game's parchment pages (Bestiary)
+
     ReferenceView(Context c, int text, int dim, int accent, int card, int bg) {
+        this(c, text, dim, accent, card, bg, false);
+    }
+
+    ReferenceView(Context c, int text, int dim, int accent, int card, int bg, boolean paper) {
         super(c);
         this.text = text; this.dim = dim; this.accent = accent; this.card = card; this.bg = bg;
+        this.paper = paper;
+        if (paper) {
+            setBackground(Theme.paper(c.getResources().getDisplayMetrics().density * 520));
+            setPadding(Math.round(12 * c.getResources().getDisplayMetrics().density), Math.round(8 * c.getResources().getDisplayMetrics().density),
+                    Math.round(12 * c.getResources().getDisplayMetrics().density), 0);
+        }
         density = c.getResources().getDisplayMetrics().density;
         setOrientation(VERTICAL);
 
@@ -55,6 +67,7 @@ final class ReferenceView extends LinearLayout {
         addView(hs);
 
         list = new ListView(c);
+        list.setDivider(new android.graphics.drawable.ColorDrawable(paper ? 0x40302F2B : Theme.RULE));   // 0.17.0: hairlines
         list.setDividerHeight(dp(1));
         list.setOnItemClickListener((parent, v, pos, id) -> open(shown.get(pos)));
         LayoutParams lp = new LayoutParams(-1, 0, 1);
@@ -65,7 +78,7 @@ final class ReferenceView extends LinearLayout {
         LinearLayout d = new LinearLayout(c);
         d.setOrientation(VERTICAL);
         d.setPadding(dp(10), dp(8), dp(10), dp(10));
-        d.setBackground(round(card, 8));
+        d.setBackground(Theme.section(dp(1)));                // 0.17.0: no box
         TextView back = tv("◂ Back to list", 13, accent, true);
         back.setPadding(0, dp(2), 0, dp(8));
         back.setOnClickListener(v -> showList());
@@ -113,8 +126,9 @@ final class ReferenceView extends LinearLayout {
         for (int i = 0; i < chips.getChildCount(); i++) {
             TextView t = (TextView) chips.getChildAt(i);
             boolean on = f == null ? t.getTag() == null : f.equals(t.getTag());
-            t.setBackground(round(on ? accent : card, 12));
-            t.setTextColor(on ? bg : text);
+            t.setBackground(on ? round(Theme.MARK, 0) : (paper ? null : round(card, 12)));
+            t.setTextColor(text);
+            t.setPadding(on ? dp(14) : dp(10), dp(4), dp(10), dp(4));
         }
         shown = source.entries(f);
         list.setAdapter(new Adapter());
@@ -138,7 +152,8 @@ final class ReferenceView extends LinearLayout {
         for (PageTable.Block bl : PageTable.parse(e.lines)) {
             switch (bl.kind) {
                 case HEADING: {
-                    TextView h = tv(bl.text, 14, accent, true);
+                    TextView h = tv(bl.text.toUpperCase(), 12, paper ? Theme.INK_ACCENT : Theme.HEAD, true);
+                    h.setLetterSpacing(0.08f);
                     h.setPadding(0, dp(10), 0, dp(2));
                     detailBox.addView(h);
                     break;
@@ -146,10 +161,10 @@ final class ReferenceView extends LinearLayout {
                 case ROW: {
                     LinearLayout row = new LinearLayout(getContext());
                     row.setPadding(dp(6), dp(3), dp(6), dp(3));
-                    row.setBackground(round(card, 4));
+                    row.setBackground(Theme.section(dp(1)));          // a ruled table, as the game's
                     TextView item = tv(bl.text, 14, text, false);
                     row.addView(item, new LayoutParams(0, -2, 1));
-                    TextView pct = tv(bl.chance, 14, Theme.GOLD, true);
+                    TextView pct = tv(bl.chance, 14, paper ? Theme.INK_ACCENT : Theme.GOLD, true);
                     pct.setGravity(Gravity.END);
                     row.addView(pct, new LayoutParams(dp(64), -2));
                     LayoutParams lp = new LayoutParams(-1, -2);
@@ -203,6 +218,7 @@ final class ReferenceView extends LinearLayout {
     private TextView tv(String s, int sp, int color, boolean bold) {
         TextView t = Theme.label(getContext(), s, sp, color, bold);
         t.setGravity(Gravity.START);
+        if (paper) t.setShadowLayer(0, 0, 0, 0);               // ink on paper: no dark edge
         return t;
     }
 
