@@ -70,7 +70,6 @@ final class ZodiacBackground extends View {
     // lightly on purpose (a still bottom screen hurt FFXII's frame pacing, Perf_Results_2026-10-25.md).
     private RadialGradient[] smoke;
     private RadialGradient vignette;
-    private final android.graphics.Matrix m = new android.graphics.Matrix();
     private final Paint smokePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 
     private void drawSmoke(Canvas c) {
@@ -92,10 +91,13 @@ final class ZodiacBackground extends View {
                     : 0.55f + 0.15f * (float) Math.sin(t + 1);
             float y = i == 0 ? 0.45f + 0.10f * (float) Math.cos(2 * t) : i == 1 ? 0.60f + 0.12f * (float) Math.sin(3 * t)
                     : 0.30f + 0.08f * (float) Math.cos(3 * t);
-            m.setTranslate(x * w, y * h);
-            smoke[i].setLocalMatrix(m);
+            // Move the canvas, not the shader: a changed shader matrix makes Android rebuild its native shader.
+            float tx = x * w, ty = y * h;
             smokePaint.setShader(smoke[i]);
-            c.drawRect(0, 0, w, h, smokePaint);
+            c.save();
+            c.translate(tx, ty);
+            c.drawRect(-tx, -ty, w - tx, h - ty, smokePaint);
+            c.restore();
         }
         smokePaint.setShader(vignette);
         c.drawRect(0, 0, w, h, smokePaint);

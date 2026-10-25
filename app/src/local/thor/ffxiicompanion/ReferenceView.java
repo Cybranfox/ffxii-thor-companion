@@ -86,7 +86,7 @@ final class ReferenceView extends LinearLayout {
         d.addView(back);
         detailTitle = tv("", 18, text, true);
         d.addView(detailTitle);
-        detailSub = tv("", 13, dim, false);
+        detailSub = tv("", 13, paper ? text : dim, false);       // small ink on paper needs the full ink colour
         detailSub.setPadding(0, dp(2), 0, 0);
         d.addView(detailSub);
         detailBox = new LinearLayout(c);
@@ -212,7 +212,7 @@ final class ReferenceView extends LinearLayout {
         n.setSingleLine(true);
         n.setEllipsize(TextUtils.TruncateAt.END);
         r.addView(n, new LayoutParams(0, -2, 1));
-        TextView s = tv("", 12, dim, false);
+        TextView s = tv("", 12, paper ? text : dim, false);
         s.setSingleLine(true);
         s.setEllipsize(TextUtils.TruncateAt.END);
         s.setGravity(Gravity.END);

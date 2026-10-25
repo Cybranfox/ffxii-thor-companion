@@ -304,7 +304,9 @@ public class MainActivity extends Activity {
         content.setOrientation(LinearLayout.VERTICAL);
         content.setPadding(0, 0, dp(12), 0);                // pages keep a right margin; parchment pages run into it
         content.setClipToPadding(false);
-        mainRow.addView(tabRow, new LinearLayout.LayoutParams(dp(100), -1));
+        // wider at large text sizes so "Licenses" and "Bestiary" don't get cut off
+        float fs = getResources().getConfiguration().fontScale;
+        mainRow.addView(tabRow, new LinearLayout.LayoutParams(dp(fs > 1.15f ? 120 : 100), -1));
         mainRow.addView(content, new LinearLayout.LayoutParams(0, -1, 1));
         root.addView(mainRow, new LinearLayout.LayoutParams(-1, 0, 1));
         tabBar = tabRow;
@@ -1512,9 +1514,11 @@ public class MainActivity extends Activity {
                 int s0 = sb.length();
                 Reference names = loadReference();                    // 0.16.0: the game's own element names
                 String en = names != null ? names.elementName(i) : null;
-                sb.append(en != null ? en : Target.ELEMENTS[i]);
-                sb.setSpan(new android.text.style.ForegroundColorSpan(ELEMENT_COLORS[i]), s0, sb.length(),
+                sb.append("● ");                                   // the colour on a small mark; the word stays light
+                sb.setSpan(new android.text.style.ForegroundColorSpan(ELEMENT_COLORS[i]), s0, s0 + 1,
                         android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.setSpan(new android.text.style.RelativeSizeSpan(0.8f), s0, s0 + 1, android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+                sb.append(en != null ? en : Target.ELEMENTS[i]);
                 sb.append(" ");
             }
         }
