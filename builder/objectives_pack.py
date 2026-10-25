@@ -19,6 +19,10 @@ World areas (0.17.0, HuntMap_Review_2026-10-25.md): a kind-0 helper names world-
   count, u32 text IDs per world ID (menu_mapname). A world's regions are the PLMN regions with that byte, named from
   PLMN slot maps + region (0x377870); region r is atlas region subKK for every cmap sublocation k whose v0 low byte is r
   (0x3BF6C0).
+NPC names (0.17.0, HuntText_0F38_2026-10-25.md): `0F 38 b1 b2 b3` inserts a person's name (0x2B5240); with b1 & 7 != 0
+  the id is ((b2&0x7F)<<8 | (b3&0x7F) | ((b1&0xC0)<<7 | (b1&0x20))<<2) & 0xFFFF & ~0x4000 (0x3FFB00). Names come from
+  us/bin/npcdic.bin ('NPC0', u32 count +8, u32 offsets +0xC, two per id: before met / met, chosen by a save bit,
+  0x2639E0). Only ids whose two variants agree are used; any other insert leaves the text out, as before.
 Text: the game's encoding (gambit_names.decode); bytes it doesn't cover are read from the user's own font00.dat, where
   glyph (byte - 0x20) holds the character as UTF-8 (all 68 known bytes agree). 0x0F 0x20 0x81 xx is formatting and is
   dropped, 0x02 is a line break. A text with any byte still unknown is left out rather than shown garbled.
@@ -41,6 +45,7 @@ TITLES = 'ps2data/image/ff12/test_battle/us/binaryfile/questtitle.bin'
 AMAP = 'ps2data/image/ff12/myoshiok/us/worldmap/menumap_area.bin'
 PLMN = 'ps2data/image/ff12/us/bin/planmapname.bin'
 FONT = 'gamedata/d3d11/artdata/font/us/font00.dat'
+NPCDIC = 'ps2data/image/ff12/us/bin/npcdic.bin'
 HUNT_GROUP = 1
 MAX_BYTES = 1 << 20
 
@@ -73,12 +78,47 @@ def font_chars(data):
     return out
 
 
-def text(raw, chars):
-    """Decoded text, or None when any byte is still unknown."""
+def npc_names(d, chars):
+    """{id: name} from npcdic.bin, only for ids whose two variants (before met / met) are the same text."""
+    if not 12 <= len(d) <= MAX_BYTES or d[:4] != b'NPC0':
+        raise ValueError('not an NPC0 file')
+    n = _u('<I', d, 8)[0]
+    if n % 2 or n > 8192 or 12 + 4 * n > len(d):
+        raise ValueError('npcdic count')
+    offs = _u(f'<{n}I', d, 12)
+
+    def entry(i):
+        o = offs[i]
+        e = d.find(b'\0', o)
+        if not 12 + 4 * n <= o < len(d) or e < 0:
+            raise ValueError('npcdic entry')
+        return d[o:e]
+    out = {}
+    for i in range(n // 2):
+        a, b = entry(2 * i), entry(2 * i + 1)
+        if a == b and a:
+            t = text(a, chars)
+            if t:
+                out[i] = t
+    return out
+
+
+def text(raw, chars, npc=None):
+    """Decoded text, or None when any byte is still unknown (or a name insert can't be resolved from `npc`)."""
     out, i = [], 0
     while i < len(raw):
         if raw[i:i + 3] == b'\x0f\x20\x81' and i + 4 <= len(raw):
             i += 4
+            continue
+        if npc is not None and raw[i:i + 2] == b'\x0f\x38':
+            if i + 5 > len(raw) or raw[i + 2] & 7 == 0:
+                return None                                  # the 4-byte form inserts a live value
+            b1, b2, b3 = raw[i + 2], raw[i + 3], raw[i + 4]
+            v = ((b2 & 0x7F) << 8 | (b3 & 0x7F) | ((b1 & 0xC0) << 7 | (b1 & 0x20)) << 2) & 0xFFFF & ~0x4000
+            if v not in npc:
+                return None
+            out.append(npc[v])
+            i += 5
             continue
         c = raw[i]
         if c == 0x02:
@@ -229,7 +269,7 @@ def world_areas(worlds, amap, cmap, plmn, labels, chars):
     return out
 
 
-def hunts(menu, detail, titles, chars):
+def hunts(menu, detail, titles, chars, npc=None):
     if not 12 <= len(menu) <= MAX_BYTES or menu[:4] != b'qstd':
         raise ValueError('not a qstd file')
     groups, count = _u('<HH', menu, 8)
@@ -256,7 +296,7 @@ def hunts(menu, detail, titles, chars):
             stop = detail.find(b'\0', s)
             if not 16 + 20 * rows <= s < len(detail) or stop < 0:
                 raise ValueError('hunt narrative')
-            paragraphs = [text(p, chars) for p in detail[s:stop].split(b'\x03')]
+            paragraphs = [text(p, chars, npc) for p in detail[s:stop].split(b'\x03')]
         helper = _u('<H', detail, 16 + 20 * ordinal + 6)[0]
         hints = map_hints(detail, banks[3] + helper) if banks[3] != 0xFFFF and helper != 0xFFFF else None
         out.append({'questId': quest, 'title': text(titles.get(title_id, b''), chars),
@@ -275,7 +315,8 @@ def build(read):
     for threshold, gate, guide, index in rows:
         raw = guides[guide][index] if index < len(guides[guide]) else None
         hints.append({'threshold': threshold, 'gate': gate, 'text': text(raw, chars) if raw else None})
-    hunt_rows = hunts(read(MENU), read(DETAIL.format(HUNT_GROUP)), st2e_sparse(read(TITLES)), chars)
+    hunt_rows = hunts(read(MENU), read(DETAIL.format(HUNT_GROUP)), st2e_sparse(read(TITLES)), chars,
+                      npc_names(read(NPCDIC), chars))
     worlds = []
     for h in hunt_rows:
         if h['mapHints'] and h['mapHints']['kind'] == 0:

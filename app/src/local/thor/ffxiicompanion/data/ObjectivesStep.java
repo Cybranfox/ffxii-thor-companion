@@ -14,6 +14,7 @@ public final class ObjectivesStep {
     static final String FONT = "gamedata/d3d11/artdata/font/us/font00.dat";
     static final String TITLES = "ps2data/image/ff12/test_battle/us/binaryfile/questtitle.bin";
     static final String FLAGS = "ps2data/image/ff12/us/bin/mapjumpgroupflagrom.bin";
+    static final String NPCDIC = "ps2data/image/ff12/us/bin/npcdic.bin";
     static IllegalArgumentException bad(String s) { return new IllegalArgumentException(s); }
     static void extent(byte[] d, long o, long n) {
         if (o < 0 || n < 0 || o > d.length || n > d.length-o) throw bad("read extent");
@@ -75,10 +76,32 @@ public final class ObjectivesStep {
         int a=0,z=s.length();while(a<z && space(s.codePointAt(a)))a+=Character.charCount(s.codePointAt(a));
         while(z>a && space(s.codePointBefore(z)))z-=Character.charCount(s.codePointBefore(z));return s.substring(a,z);
     }
-    static String text(byte[] raw,Map<Integer,String> chars) {
+    static String text(byte[] raw,Map<Integer,String> chars) { return text(raw,chars,null); }
+    /** 0.17.0: objectives_pack.npc_names: {id: name} for ids whose two npcdic.bin variants are the same text. */
+    static Map<Integer,String> npcNames(byte[] d,Map<Integer,String> chars) {
+        file(d,12,MAX,"NPC0");long n=u32(d,8);
+        if(n%2!=0 || n>8192 || 12+4*n>d.length)throw bad("npcdic count");
+        Map<Integer,String> out=new HashMap<>();
+        for(int i=0;i<n/2;i++) {
+            byte[] a=npcEntry(d,(int)n,2*i),b=npcEntry(d,(int)n,2*i+1);
+            if(a.length>0 && Arrays.equals(a,b)){String t=text(a,chars);if(t!=null && !t.isEmpty())out.put(i,t);}
+        }
+        return out;
+    }
+    static byte[] npcEntry(byte[] d,int n,int i) {
+        int o=index(u32(d,12+4*i));if(o<12+4*n || o>=d.length)throw bad("npcdic entry");
+        return slice(d,o,nul(d,o,d.length));
+    }
+    static String text(byte[] raw,Map<Integer,String> chars,Map<Integer,String> npc) {
         StringBuilder out=new StringBuilder();
         for(int i=0;i<raw.length;) {
             if(i+4<=raw.length && (raw[i]&255)==15 && raw[i+1]==32 && (raw[i+2]&255)==0x81){i+=4;continue;}
+            if(npc!=null && i+2<=raw.length && (raw[i]&255)==15 && raw[i+1]==0x38) {
+                if(i+5>raw.length || (raw[i+2]&7)==0)return null;              // the 4-byte form inserts a live value
+                int b1=raw[i+2]&255,b2=raw[i+3]&255,b3=raw[i+4]&255;
+                int v=((b2&0x7F)<<8 | (b3&0x7F) | ((b1&0xC0)<<7 | (b1&0x20))<<2) & 0xFFFF & ~0x4000;
+                String n=npc.get(v);if(n==null)return null;out.append(n);i+=5;continue;
+            }
             int c=raw[i++]&255;if(c==2){out.append('\n');continue;}
             String s=known(c);if(s==null)s=chars.get(c);if(s==null)return null;out.append(s);
         }
@@ -184,6 +207,9 @@ public final class ObjectivesStep {
         return out;
     }
     static List<Object> hunts(byte[] menu,byte[] detail,Map<Long,byte[]> titles,Map<Integer,String> chars) {
+        return hunts(menu,detail,titles,chars,null);
+    }
+    static List<Object> hunts(byte[] menu,byte[] detail,Map<Long,byte[]> titles,Map<Integer,String> chars,Map<Integer,String> npc) {
         file(menu,12,MAX,"qstd");int groups=u16(menu,8),count=u16(menu,10);
         if(groups<1 || groups>16 || count>256 || menu.length!=12+8*count)throw bad("qstd rows");
         file(detail,16,MAX,null);int rows=u16(detail,14),bank2=u16(detail,4),bank3=u16(detail,6),bank5=u16(detail,10);
@@ -196,7 +222,7 @@ public final class ObjectivesStep {
             if(bank2!=65535 && rel!=65535) {
                 int s=bank2+rel;if(s<16+20*rows || s>=detail.length)throw bad("hunt narrative");
                 int end=nul(detail,s,detail.length),p=s;used=budget(used,end-s);
-                for(int j=s;j<=end;j++) if(j==end || detail[j]==3) {paragraphs.add(text(slice(detail,p,j),chars));p=j+1;}
+                for(int j=s;j<=end;j++) if(j==end || detail[j]==3) {paragraphs.add(text(slice(detail,p,j),chars,npc));p=j+1;}
             }
             int helper=u16(detail,16+20*ordinal+6);
             Map<String,Object> hints=bank3!=65535 && helper!=65535?mapHints(detail,bank3+helper):null;
@@ -221,7 +247,8 @@ public final class ObjectivesStep {
             if(raw!=null)hintTextBytes=budget(hintTextBytes,raw.length);
             hints.add(obj("threshold",r[0],"gate",r[1],"text",raw==null || raw.length==0?null:text(raw,chars)));
         }
-        List<Object> huntRows=hunts(read.read(QUEST+"menuquest.dat"),read.read(QUEST+"menuquest01.bin"),st2e(read.read(TITLES)),chars);
+        List<Object> huntRows=hunts(read.read(QUEST+"menuquest.dat"),read.read(QUEST+"menuquest01.bin"),st2e(read.read(TITLES)),chars,
+            npcNames(read.read(NPCDIC),chars));
         List<Integer> worlds=new ArrayList<>();
         for(Object h:huntRows) {
             Object m=((Map<?,?>)h).get("mapHints");if(!(m instanceof Map) || !Integer.valueOf(0).equals(((Map<?,?>)m).get("kind")))continue;

@@ -51,7 +51,21 @@ def main():
         except ValueError:
             pass
     ok += 1
-    print(f'{ok}/4 PASS. Objectives builder: font rule for extra punctuation, unknown text left out, hint table order, hunt maps')
+    # 0F 38 b1 b2 b3: a person's name from npcdic.bin (both variants the same); id 0x2E from bytes 82 80 AE
+    names = [b'', b''] * 0x2E + [hello, hello]
+    off = 12 + 4 * len(names)
+    blob, offs = b'', []
+    for n in names:
+        offs.append(off + len(blob))
+        blob += n + b'\0'
+    npcd = b'NPC0' + struct.pack('<II', 0, len(names)) + struct.pack(f'<{len(names)}I', *offs) + blob
+    npc = O.npc_names(npcd, chars)
+    assert npc == {0x2E: 'Hello'}, npc
+    assert O.text(bytes.fromhex('0f388280ae99'), chars, npc) == 'Hello!'
+    assert O.text(bytes.fromhex('0f388280ae'), chars) is None                # without names: left out, as before
+    assert O.text(bytes.fromhex('0f388080ae'), chars, npc) is None           # 4-byte form (a live value): left out
+    ok += 1
+    print(f'{ok}/5 PASS. Objectives builder: font rule for extra punctuation, unknown text left out, hint table order, hunt maps, name inserts')
 
 
 if __name__ == '__main__':

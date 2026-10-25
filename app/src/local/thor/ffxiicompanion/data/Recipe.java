@@ -38,6 +38,7 @@ public final class Recipe {
             "ps2data/image/ff12/test_battle/us/binaryfile/menu_mapname.bin",
             "ps2data/image/ff12/test_battle/us/binaryfile/questtitle.bin",
             "ps2data/image/ff12/us/bin/mapjumpgroupflagrom.bin",
+            "ps2data/image/ff12/us/bin/npcdic.bin",
             "ps2data/image/ff12/us/bin/planmapname.bin"));
 
     /** The game script's config numbers (ThorCompanion-core.lua rawCopy CONFIGS, 1-based) and their x64 paths. */
