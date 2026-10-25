@@ -936,6 +936,8 @@ public class MainActivity extends Activity {
         String label = SetupText.label(setupShown);
         setupButton.setVisibility(label != null ? View.VISIBLE : View.GONE);
         if (label != null) setupButton.setText(label);
+        // 0.17.0: one Build button at a time: while the setup list offers it, the Game data card just shows progress
+        if (setupShown == SetupFlow.Action.START_BUILD || setupShown == SetupFlow.Action.RETRY_BUILD) dataButton.setVisibility(View.GONE);
     }
 
     static final String INSTALL_URL = "https://github.com/Cybranfox/ffxii-thor-companion/blob/main/docs/INSTALL.md";
