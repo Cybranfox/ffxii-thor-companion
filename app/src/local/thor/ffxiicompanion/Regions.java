@@ -401,7 +401,9 @@ final class Regions {
         if (!full) {
             Long liveSlot = Json.lng(Json.obj(s.data, "reveal"), "slot");
             Integer slot = current != null && current.sheet != null ? atlas.slot(current.sheet) : null;
-            if (table == null || liveSlot == null || slot == null || liveSlot.intValue() != slot) {
+            // in an area with no map of its own there's no sheet to compare the game's slot with; the table alone is used
+            boolean noSheet = current == null || current.sheet == null;
+            if (table == null || (!noSheet && (liveSlot == null || slot == null || liveSlot.intValue() != slot))) {
                 v.note = "Needs the live map from the game.";
                 return v;
             }
@@ -464,10 +466,14 @@ final class Regions {
         return v;
     }
 
-    // 0.17.0: hunt browsing keeps even fog-bypassing symbols off unexplored ground.
+    // 0.17.0: hunt browsing keeps the fog-bypassing hunt marker (group 9) off unexplored ground: its tile or one next to
+    // it must be explored. The game puts some markers on a sheet's edge (Rabanastre's at y = -1), so not the tile alone.
     private static boolean exploredIcon(Part p, Icon i) {
-        int x = i.dx / 16, y = i.dy / 16;
-        return p.visible != null && cell(p.visible, x, y);
+        boolean[][] c = p.revealed != null ? p.revealed : p.visible;
+        if (c == null) return false;
+        int x = Math.floorDiv(i.dx, 16), y = Math.floorDiv(i.dy, 16);
+        for (int yy = y - 1; yy <= y + 1; yy++) for (int xx = x - 1; xx <= x + 1; xx++) if (cell(c, xx, yy)) return true;
+        return false;
     }
 
     /** Links, exit labels and symbols for the drawn areas (shared by build and buildHunt). */
@@ -485,7 +491,7 @@ final class Regions {
             for (Part p : v.parts) {
                 if (p.sheet.sheetsForMap > 1) continue;     // a symbol row names a map, not one of its sheets
                 for (Icon i : reg.icons) {
-                    if (i.mapId != p.sheet.mapId || !symbols.containsKey(i.type) || (hunt && !exploredIcon(p, i))) continue;
+                    if (i.mapId != p.sheet.mapId || !symbols.containsKey(i.type) || (hunt && i.group == 9 && !exploredIcon(p, i))) continue;
                     if (Flags.symbolVisible(flags, thresholds, i.group, i.index, i.type, i.sx, i.sy, i.gate, p.revealed))
                         v.symbols.add(i.group == 9 ? new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.dx, p.y + i.dy)   // no line
                                 : new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.sx, p.y + i.sy));

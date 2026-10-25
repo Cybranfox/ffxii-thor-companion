@@ -135,6 +135,7 @@ public class MainActivity extends Activity {
     Integer huntQuest;               // 0.17.0: the full map shows this hunt's map instead of where you are
     String huntRegion;               // ...or, for a hunt whose map names areas, this region ("subKK")
     Integer huntOpen;                // the region-only hunt whose choices are showing in the journal
+    String huntsKey;                 // what the Hunts card shows now (rebuilt only when it changes)
     static final String MAP_HELP = "Pinch to zoom, drag to move. Double-tap: this area / the whole region.";
     final AutoClosePolicy autoClose = new AutoClosePolicy();
     boolean installSynced;
@@ -624,8 +625,13 @@ public class MainActivity extends Activity {
         hintLine.setVisibility(hint != null ? View.VISIBLE : View.GONE);
         huntsCard.setVisibility(option(OPT_HUNTS) ? View.VISIBLE : View.GONE);
         if (!option(OPT_HUNTS)) return;
-        huntsRows.removeAllViews();
         List<Objectives.Entry> js = o != null && ok ? o.journal(Json.obj(s.data, "quests")) : java.util.Collections.emptyList();
+        // 0.17.0: rebuild only when something shown changes; rebuilding every refresh swallowed taps on the rows
+        StringBuilder key = new StringBuilder().append(o != null).append(ok).append(huntOpen);
+        for (Objectives.Entry e : js) key.append('|').append(e.hunt.questId).append(':').append(e.stage);
+        if (key.toString().equals(huntsKey)) return;
+        huntsKey = key.toString();
+        huntsRows.removeAllViews();
         huntsNote.setText(o == null ? "Needs the game data: see Status → Game data."
                 : !ok ? "Shown while the game is running." : js.isEmpty() ? "No accepted hunts yet." : "");
         huntsNote.setVisibility(huntsNote.getText().length() == 0 ? View.GONE : View.VISIBLE);
@@ -670,8 +676,8 @@ public class MainActivity extends Activity {
                         c.setGravity(Gravity.CENTER_VERTICAL);
                         c.setMinHeight(dp(44));
                         c.setPadding(dp(16), 0, 0, 0);
-                        final String key = reg[0];
-                        c.setOnClickListener(x -> openHuntRegion(q, key));
+                        final String regionKey = reg[0];
+                        c.setOnClickListener(x -> openHuntRegion(q, regionKey));
                         r.addView(c);
                     }
                 }
@@ -1683,6 +1689,9 @@ public class MainActivity extends Activity {
         Bitmap bm = d.mode == Reveal.Mode.HIDDEN ? null : mask(d.sheet);
         if (d.mode != Reveal.Mode.HIDDEN && bm == null) d = Reveal.Decision.hidden(d.mapId, maskProblem);
         if (d.mode == Reveal.Mode.HIDDEN) {
+            // 0.17.0: an area without a map of its own (an inn, a shop) can still show a hunt's map
+            if (huntQuest != null && mapPage.getVisibility() == View.VISIBLE
+                    && showHuntMap(v, d, Position.locate(v.location, null, fixtureMode), false)) return;
             setChip(mapChip, new ReceiverState.Family(ReceiverState.FamilyState.DISABLED, -1, null));
             mapView.setVisibility(View.GONE);
             mapView.set(null, null, null, MASK_SAMPLE);
