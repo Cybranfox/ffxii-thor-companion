@@ -133,6 +133,8 @@ public class MainActivity extends Activity {
     ReceiverState state;
     ReceiverState.View lastView;
     Integer huntQuest;               // 0.17.0: the full map shows this hunt's map instead of where you are
+    String huntRegion;               // ...or, for a hunt whose map names areas, this region ("subKK")
+    Integer huntOpen;                // the region-only hunt whose choices are showing in the journal
     static final String MAP_HELP = "Pinch to zoom, drag to move. Double-tap: this area / the whole region.";
     final AutoClosePolicy autoClose = new AutoClosePolicy();
     boolean installSynced;
@@ -536,7 +538,7 @@ public class MainActivity extends Activity {
         head.addView(mapTitle, new LinearLayout.LayoutParams(0, -2, 1));
         mapRecentre = pageButton("Re-centre");
         mapRecentre.setVisibility(View.GONE);
-        mapRecentre.setOnClickListener(x -> { if (huntQuest != null) bigMap.focusArea(); else bigMap.recentre(); });
+        mapRecentre.setOnClickListener(x -> { if (huntQuest != null && huntRegion == null) bigMap.focusArea(); else bigMap.recentre(); });
         head.addView(mapRecentre);
         TextView close = pageButton("Close");
         close.setOnClickListener(x -> openMap(false));
@@ -649,10 +651,30 @@ public class MainActivity extends Activity {
                 r.setMinimumHeight(dp(48));
                 final int q = e.hunt.questId;
                 r.setOnClickListener(x -> openHuntMap(q));
-            } else if (e.hunt.mapKind == 0) {
-                TextView n2 = text("Its map covers several regions: see the game's Clan Primer.", 11, DIM, false);
-                n2.setPadding(0, dp(3), 0, 0);
-                r.addView(n2);
+            } else if (!o.areasFor(e.hunt, e.stage).isEmpty()) {
+                // the game's hunt map for this one names several areas, not a point: choose one, see its explored map
+                final int q = e.hunt.questId;
+                boolean open = huntOpen != null && huntOpen == q;
+                TextView go = text(open ? "\u25be Choose a region" : "\u25b8 Hunt map: several regions", 12, TEXT, false);
+                go.setPadding(0, dp(3), 0, 0);
+                r.addView(go);
+                r.setMinimumHeight(dp(48));
+                r.setOnClickListener(x -> { huntOpen = open ? null : q; showObjectives(lastView); });
+                if (open) for (Objectives.WorldArea a : o.areasFor(e.hunt, e.stage)) {
+                    TextView h = text(a.name != null ? a.name : "Area " + a.worldId, 11, DIM, false);
+                    heading(h);
+                    h.setPadding(dp(8), dp(8), 0, dp(2));
+                    r.addView(h);
+                    for (String[] reg : a.regions) {
+                        TextView c = text(reg[1] != null ? reg[1] : reg[0], 14, TEXT, false);
+                        c.setGravity(Gravity.CENTER_VERTICAL);
+                        c.setMinHeight(dp(44));
+                        c.setPadding(dp(16), 0, 0, 0);
+                        final String key = reg[0];
+                        c.setOnClickListener(x -> openHuntRegion(q, key));
+                        r.addView(c);
+                    }
+                }
             }
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = dp(4);
@@ -676,6 +698,16 @@ public class MainActivity extends Activity {
         if (huntQuest != null) bigMap.focusArea();
     }
 
+    /** 0.17.0: the full map on one region of a region-only hunt (its explored areas, no marker). */
+    void openHuntRegion(int questId, String regionKey) {
+        if (tab != 0 || lastView == null) return;
+        huntQuest = questId;
+        huntRegion = regionKey;
+        openMap(true);
+        showMap(lastView);
+        if (huntQuest != null) bigMap.recentre();
+    }
+
     /** The journal entry for the hunt on the full map, or null when it's no longer listed or live. */
     Objectives.Entry huntEntry(ReceiverState.View v) {
         if (huntQuest == null || v == null) return null;
@@ -693,6 +725,7 @@ public class MainActivity extends Activity {
         if (open && tab != 0) return;
         if (!open && huntQuest != null) {                  // back from a hunt's map: the full map is yours again
             huntQuest = null;
+            huntRegion = null;
             mapPageNote.setText(MAP_HELP);
             if (lastView != null) showMap(lastView);
         }
@@ -753,6 +786,7 @@ public class MainActivity extends Activity {
         styleTabs();
         mapPage.setVisibility(View.GONE);
         huntQuest = null;
+        huntRegion = null;
         mapPageNote.setText(MAP_HELP);
         liveScroll.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
         gearView.setVisibility(View.GONE);
@@ -1702,12 +1736,31 @@ public class MainActivity extends Activity {
      */
     boolean showHuntMap(ReceiverState.View v, Reveal.Decision d, Position.Marker mk, boolean live) {
         Objectives.Entry e = huntEntry(v);
-        Objectives.HuntMap hm = e != null ? Objectives.mapFor(e.hunt, e.stage) : null;
+        Objectives o = e != null ? objectives.get() : null;
+        Objectives.HuntMap hm = e != null && huntRegion == null ? Objectives.mapFor(e.hunt, e.stage) : null;
+        Objectives.WorldArea area = null;
+        if (e != null && huntRegion != null && o != null)
+            for (Objectives.WorldArea a : o.areasFor(e.hunt, e.stage))
+                for (String[] r : a.regions) if (r[0].equals(huntRegion)) area = a;
         Snapshot s = v.current != null && v.current.map() != null ? v.current : v.location;
-        if (hm == null || regions == null || atlas == null || s == null) {
+        if ((hm == null && area == null) || regions == null || atlas == null || s == null) {
             huntQuest = null;
+            huntRegion = null;
             mapPageNote.setText(MAP_HELP);
             return false;
+        }
+        if (area != null) {
+            Regions.View ov = regions.buildOverview(huntRegion, d, s, atlas);
+            List<Regions.Part> drawable = new java.util.ArrayList<>();
+            for (Regions.Part p : ov.parts) if (p.focus || mask(p.sheet) != null) drawable.add(p);
+            bigMap.set(ov, drawable, masks, MASK_SAMPLE);
+            boolean here = false;
+            for (Regions.Part p : ov.parts) if (p.focus && d.sheet != null && p.sheet.file.equals(d.sheet.file)) here = true;
+            bigMap.setMarker(here && mk.reason == null ? mk.px : null, here && mk.reason == null ? mk.py : null, live);
+            String t = e.hunt.title != null ? e.hunt.title : "Hunt " + e.hunt.questId;
+            mapPageNote.setText(t + ": " + (ov.note != null ? ov.note : (area.name != null ? area.name + ", " : "")
+                    + "one of the places the game's hunt map shows (no single marker)."));
+            return true;
         }
         Regions.View hv = regions.buildHunt(d, hm.mapId, hm.markers, s, atlas);
         List<Regions.Part> drawable = new java.util.ArrayList<>();

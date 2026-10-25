@@ -265,6 +265,12 @@ final class Regions {
 
     Region regionOf(String sheetFile) { return byFile.get(sheetFile); }
 
+    /** 0.17.0: a region by its key ("subKK", the regions.json "region" value), or null. */
+    Region regionByKey(String key) {
+        for (Region r : byFile.values()) if (r.name.equals(key)) return r;
+        return null;
+    }
+
     /** Non-zero records by slot from data.revealTable, or null unless it is an ok, stable ffxii.reveal.v1 table. */
     static Map<Integer, byte[]> table(Snapshot s) {
         Map<String, Object> t = Json.obj(s.data, "revealTable");
@@ -372,6 +378,24 @@ final class Regions {
         Atlas.Sheet target = sheets.get(0);
         Region reg = regionOf(target.file);
         if (reg == null) { v.note = "This hunt's map isn't in your map data."; return v; }
+        return huntRegion(v, reg, target, mapId, markers, current, s, atlas);
+    }
+
+    /**
+     * 0.17.0: a whole region for a hunt whose map names areas, not a point (the region-only hunt): its explored areas,
+     * framed together, with no marker and nothing unexplored. The first drawn area carries the focus the view needs.
+     */
+    View buildOverview(String regionKey, Reveal.Decision current, Snapshot s, Atlas atlas) {
+        View v = new View();
+        Region reg = regionByKey(regionKey);
+        if (reg == null) { v.note = "This region isn't in your map data."; return v; }
+        v = huntRegion(v, reg, null, -1, java.util.Collections.<Integer>emptyList(), current, s, atlas);
+        if (v.note == null && v.parts.isEmpty()) v.note = "You haven't explored this region yet.";
+        return v;
+    }
+
+    private View huntRegion(View v, Region reg, Atlas.Sheet target, int mapId, List<Integer> markers, Reveal.Decision current,
+                            Snapshot s, Atlas atlas) {
         boolean full = current != null && current.mode == Reveal.Mode.FULL;
         Map<Integer, byte[]> table = full ? null : table(s);
         if (!full) {
@@ -388,7 +412,7 @@ final class Regions {
             Atlas.Sheet sh = atlas.sheet(p.file);
             if (sh == null || sh.sheetsForMap > 1 || !Reveal.screenVerifiedWidth(sh.width)
                     || sh.stride != Reveal.strideFor(sh.width)) continue;
-            boolean isTarget = sh.file.equals(target.file);
+            boolean isTarget = target != null && sh.file.equals(target.file);
             boolean isCurrent = current != null && current.sheet != null && sh.file.equals(current.sheet.file);
             int cols = sh.width / Reveal.TILE, rows = sh.height / Reveal.TILE;
             if (rows * sh.stride > Reveal.RECORD_BYTES) continue;
@@ -420,6 +444,12 @@ final class Regions {
             else v.neighbours++;
             v.parts.add(isTarget ? 0 : v.parts.size(), part);
             if (any) shownMaps.add(sh.mapId);
+        }
+        if (target == null) {                              // overview: the first explored area holds the focus
+            if (v.parts.isEmpty()) return v;
+            v.parts.get(0).focus = true;
+            decorate(v, reg, shownMaps, s, atlas, true);
+            return v;
         }
         if (v.parts.isEmpty() || !v.parts.get(0).focus) { v.parts.clear(); v.note = "This hunt's map isn't in your map data."; return v; }
         decorate(v, reg, shownMaps, s, atlas, true);

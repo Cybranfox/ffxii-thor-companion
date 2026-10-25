@@ -80,7 +80,9 @@ public final class ObjectivesTest {
                 + "{\"questId\":153,\"phases\":\"" + hex(new byte[28]) + "\",\"paragraphs\":[],\"mapHints\":{\"kind\":0,\"entries\":["
                 + "{\"showMask\":\"ffffffffffffff\",\"markerMask\":\"00000000000000\",\"regionId\":1}]}},"
                 + "{\"questId\":140,\"phases\":\"" + hex(new byte[28]) + "\",\"paragraphs\":[],\"mapHints\":{\"kind\":1,\"entries\":["
-                + "{\"showMask\":\"zz\",\"markerMask\":\"00\",\"mapId\":1,\"markerIndex\":0}]}}]}"));
+                + "{\"showMask\":\"zz\",\"markerMask\":\"00\",\"mapId\":1,\"markerIndex\":0}]}}],"
+                + "\"worldAreas\":[{\"worldId\":1,\"name\":\"Area\",\"regions\":[{\"region\":\"sub00\",\"name\":\"R\"},"
+                + "{\"region\":\"bad\",\"name\":\"x\"}]},{\"worldId\":3,\"name\":null,\"regions\":[]}]}"));
         Objectives.Hunt h128 = m.hunts.get(0);
         int[] at = {0, 29, 30, 49, 50, 255}, want = {291, 291, 227, 227, 291, 291};
         boolean all = true;
@@ -90,7 +92,10 @@ public final class ObjectivesTest {
         }
         check(all, "hunt map follows the stage: town, field map, town; its marker row");
         check(m.hunts.get(1).mapKind == 0 && Objectives.mapFor(m.hunts.get(1), 40) == null, "region-only hunt: no single map");
+        java.util.List<Objectives.WorldArea> areas = m.areasFor(m.hunts.get(1), 40);
+        check(areas.size() == 1 && areas.get(0).worldId == 1 && areas.get(0).regions.size() == 1
+                && "sub00".equals(areas.get(0).regions.get(0)[0]), "region-only hunt: its world areas and their regions (bad keys left out)");
         check(m.hunts.get(2).mapKind == -1 && Objectives.mapFor(m.hunts.get(2), 40) == null, "malformed helper: no map, hunt kept");
-        System.out.println("PASS ObjectivesTest 15 checks (hint: last eligible row, gates, signed scenario; hunt journal; hunt maps)");
+        System.out.println("PASS ObjectivesTest 16 checks (hint: last eligible row, gates, signed scenario; hunt journal; hunt maps)");
     }
 }

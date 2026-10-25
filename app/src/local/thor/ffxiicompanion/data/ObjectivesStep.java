@@ -156,6 +156,33 @@ public final class ObjectivesStep {
         }
         return obj("kind",kind,"entries",entries);
     }
+    /** 0.17.0: objectives_pack.world_areas: the world-map areas kind-0 hunt helpers name, with their atlas regions. */
+    static List<Object> worldAreas(List<Integer> worlds,byte[] amap,byte[] cmap,byte[] plmn,Map<Integer,String> labels,Map<Integer,String> chars) {
+        file(amap,16,4096,"amap");int off=u16(amap,10),texts=u16(amap,14),count=u8(amap,off);
+        if(off+1+count>amap.length)throw bad("amap regions");
+        long ntext=u32(amap,texts);if(ntext>256 || texts+4+4*ntext>amap.length)throw bad("amap texts");
+        file(plmn,16,MAX,"PLMN");long maps=u32(plmn,4),regions=u32(plmn,8),total=u32(plmn,12);
+        if(maps+regions!=total || 16+2*total>plmn.length || count!=regions)throw bad("PLMN regions");
+        file(cmap,16,MAX,"cmap");long subs=u32(cmap,12);if(subs>64)throw bad("cmap sublocations");
+        int[] low=new int[(int)subs];for(int k=0;k<subs;k++)low[k]=u16(cmap,16+8*k)&255;
+        List<Object> out=new ArrayList<>();
+        for(int w:worlds) {
+            if(w>=ntext)throw bad("world text");
+            long tid=u32(amap,texts+4+4*w);List<Object> found=new ArrayList<>();
+            for(int r=0;r<count;r++) {
+                if(u8(amap,off+1+r)!=w)continue;
+                int at=u16(plmn,index(16+2*(maps+r)));String name=null;
+                if(at!=0) {
+                    if(at<16+2*total || at>=plmn.length)throw bad("PLMN text");
+                    int stop=nul(plmn,at,plmn.length);String t=text(slice(plmn,at,stop),chars);
+                    name=t==null || t.isEmpty()?null:t;
+                }
+                for(int k=0;k<low.length;k++) if(low[k]==r)found.add(obj("region",String.format(Locale.ROOT,"sub%02d",k),"name",name));
+            }
+            out.add(obj("worldId",w,"name",tid<=0xFFFF?labels.get((int)tid):null,"regions",found));
+        }
+        return out;
+    }
     static List<Object> hunts(byte[] menu,byte[] detail,Map<Long,byte[]> titles,Map<Integer,String> chars) {
         file(menu,12,MAX,"qstd");int groups=u16(menu,8),count=u16(menu,10);
         if(groups<1 || groups>16 || count>256 || menu.length!=12+8*count)throw bad("qstd rows");
@@ -195,7 +222,14 @@ public final class ObjectivesStep {
             hints.add(obj("threshold",r[0],"gate",r[1],"text",raw==null || raw.length==0?null:text(raw,chars)));
         }
         List<Object> huntRows=hunts(read.read(QUEST+"menuquest.dat"),read.read(QUEST+"menuquest01.bin"),st2e(read.read(TITLES)),chars);
+        List<Integer> worlds=new ArrayList<>();
+        for(Object h:huntRows) {
+            Object m=((Map<?,?>)h).get("mapHints");if(!(m instanceof Map) || !Integer.valueOf(0).equals(((Map<?,?>)m).get("kind")))continue;
+            for(Object e:(List<?>)((Map<?,?>)m).get("entries")){int w=(Integer)((Map<?,?>)e).get("regionId");if(!worlds.contains(w))worlds.add(w);}
+        }
+        List<Object> areas=worlds.isEmpty()?new ArrayList<>():worldAreas(worlds,read.read(WORLD+"menumap_area.bin"),read.read(WORLD+"menumap_common.bin"),
+            read.read(BuildInfoStep.AREAS),AtlasStep.parseMapnames(read.read(AtlasStep.MAPNAME)),chars);
         return obj("format","ffxii-companion-objectives-1","hints",hints,"hunts",huntRows,
-            "thresholds",flags(read.read(FLAGS)),"note","Built from your own game files for your personal use. Do not share.");
+            "thresholds",flags(read.read(FLAGS)),"worldAreas",areas,"note","Built from your own game files for your personal use. Do not share.");
     }
 }

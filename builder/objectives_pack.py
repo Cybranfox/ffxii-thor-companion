@@ -14,6 +14,11 @@ Hunt maps (0.17.0; HuntMap_Native_2026-10-25.md): detail row +6 is a QHD0 helper
   QHD0 = tag, u32 1, u32 record offset; record = u8 count, u8 kind, then 18-byte entries {u8 selector (kind 0: the
   region), u8 marker index, u16 map ID, 7-byte map mask, 7-byte marker mask}. The game shows the first entry whose map
   mask has bit min(stage // 5, 50) (0x37EB90); its marker is NAVIICN2 group 9, row `marker index`, on that map (0x403BC0).
+World areas (0.17.0, HuntMap_Review_2026-10-25.md): a kind-0 helper names world-map areas, not regions. amap
+  (worldmap/menumap_area.bin) +0xA -> u8 count, then one byte per PLMN region = its world ID (0x254380); +0xE -> u32
+  count, u32 text IDs per world ID (menu_mapname). A world's regions are the PLMN regions with that byte, named from
+  PLMN slot maps + region (0x377870); region r is atlas region subKK for every cmap sublocation k whose v0 low byte is r
+  (0x3BF6C0).
 Text: the game's encoding (gambit_names.decode); bytes it doesn't cover are read from the user's own font00.dat, where
   glyph (byte - 0x20) holds the character as UTF-8 (all 68 known bytes agree). 0x0F 0x20 0x81 xx is formatting and is
   dropped, 0x02 is a line break. A text with any byte still unknown is left out rather than shown garbled.
@@ -25,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 from gambit_names import decode  # noqa: E402
 import menumap_icons  # noqa: E402
+import menumap_names  # noqa: E402
 
 FORMAT = 'ffxii-companion-objectives-1'
 CMAP = 'ps2data/image/ff12/myoshiok/us/worldmap/menumap_common.bin'
@@ -32,6 +38,8 @@ GUIDE = 'ps2data/image/ff12/myoshiok/us/worldmap/menumap_guide{:02d}.bin'
 MENU = 'ps2data/image/ff12/myoshiok/us/quest/menuquest.dat'
 DETAIL = 'ps2data/image/ff12/myoshiok/us/quest/menuquest{:02d}.bin'
 TITLES = 'ps2data/image/ff12/test_battle/us/binaryfile/questtitle.bin'
+AMAP = 'ps2data/image/ff12/myoshiok/us/worldmap/menumap_area.bin'
+PLMN = 'ps2data/image/ff12/us/bin/planmapname.bin'
 FONT = 'gamedata/d3d11/artdata/font/us/font00.dat'
 HUNT_GROUP = 1
 MAX_BYTES = 1 << 20
@@ -176,6 +184,51 @@ def map_hints(detail, at):
     return {'kind': kind, 'entries': entries}
 
 
+def world_areas(worlds, amap, cmap, plmn, labels, chars):
+    """[{'worldId', 'name', 'regions': [{'region': 'subKK', 'name'}]}] for the world IDs kind-0 hunt helpers name."""
+    if not 16 <= len(amap) <= 4096 or amap[:4] != b'amap':
+        raise ValueError('not an amap file')
+    off, texts = _u('<H', amap, 10)[0], _u('<H', amap, 14)[0]
+    count = _u('<B', amap, off)[0]
+    if off + 1 + count > len(amap):
+        raise ValueError('amap regions')
+    ntext = _u('<I', amap, texts)[0]
+    if ntext > 256 or texts + 4 + 4 * ntext > len(amap):
+        raise ValueError('amap texts')
+    if not 16 <= len(plmn) <= MAX_BYTES or plmn[:4] != b'PLMN':
+        raise ValueError('not a PLMN file')
+    maps, regions, total = _u('<3I', plmn, 4)
+    if maps + regions != total or 16 + 2 * total > len(plmn) or count != regions:
+        raise ValueError('PLMN regions')
+    if not 16 <= len(cmap) <= MAX_BYTES or cmap[:4] != b'cmap':
+        raise ValueError('not a cmap file')
+    subs = _u('<I', cmap, 12)[0]
+    if subs > 64:
+        raise ValueError('cmap sublocations')
+    low = [_u('<H', cmap, 0x10 + 8 * k)[0] & 0xFF for k in range(subs)]
+    out = []
+    for w in worlds:
+        if w >= ntext:
+            raise ValueError('world text')
+        tid = _u('<I', amap, texts + 4 + 4 * w)[0]
+        found = []
+        for r in range(count):
+            if amap[off + 1 + r] != w:
+                continue
+            at = _u('<H', plmn, 16 + 2 * (maps + r))[0]
+            name = None
+            if at:
+                stop = plmn.find(b'\0', at)
+                if not 16 + 2 * total <= at < len(plmn) or stop < 0:
+                    raise ValueError('PLMN text')
+                name = text(plmn[at:stop], chars) or None
+            for k, v in enumerate(low):
+                if v == r:
+                    found.append({'region': f'sub{k:02d}', 'name': name})
+        out.append({'worldId': w, 'name': labels.get(tid), 'regions': found})
+    return out
+
+
 def hunts(menu, detail, titles, chars):
     if not 12 <= len(menu) <= MAX_BYTES or menu[:4] != b'qstd':
         raise ValueError('not a qstd file')
@@ -223,6 +276,13 @@ def build(read):
         raw = guides[guide][index] if index < len(guides[guide]) else None
         hints.append({'threshold': threshold, 'gate': gate, 'text': text(raw, chars) if raw else None})
     hunt_rows = hunts(read(MENU), read(DETAIL.format(HUNT_GROUP)), st2e_sparse(read(TITLES)), chars)
+    worlds = []
+    for h in hunt_rows:
+        if h['mapHints'] and h['mapHints']['kind'] == 0:
+            worlds += [e['regionId'] for e in h['mapHints']['entries'] if e['regionId'] not in worlds]
+    areas = world_areas(worlds, read(AMAP), read(CMAP), read(PLMN), menumap_names.parse(read(menumap_names.PATH)),
+                        chars) if worlds else []
     return {'format': FORMAT, 'hints': hints, 'hunts': hunt_rows,
             'thresholds': menumap_icons.flagrom(read(menumap_icons.FLAGROM)),   # the hints' bit14 gates
+            'worldAreas': areas,
             'note': 'Built from your own game files for your personal use. Do not share.'}

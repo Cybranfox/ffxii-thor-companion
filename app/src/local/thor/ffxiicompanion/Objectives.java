@@ -39,6 +39,13 @@ final class Objectives {
         byte[] show, marker;         // 7 bytes each
     }
 
+    /** 0.17.0: a world-map area a kind-0 hunt names, with its atlas regions {key "subKK", name or null}. */
+    static final class WorldArea {
+        int worldId;
+        String name;
+        final List<String[]> regions = new ArrayList<>();
+    }
+
     /** What the game's hunt map shows for a hunt now: a map and its marker rows (group 9). */
     static final class HuntMap {
         final int mapId;
@@ -59,6 +66,7 @@ final class Objectives {
 
     final List<Hint> hints = new ArrayList<>();
     final List<Hunt> hunts = new ArrayList<>();
+    final List<WorldArea> worldAreas = new ArrayList<>();
     int[][] thresholds;
 
     private Objectives() {}
@@ -93,6 +101,22 @@ final class Objectives {
             if (ps != null) for (Object p : ps) h.paragraphs.add(p instanceof String && ((String) p).length() <= 2000 ? (String) p : null);
             parseMap(h, Json.obj(q, "mapHints"));
             r.hunts.add(h);
+        }
+        List<Object> wa = Json.arr(o, "worldAreas");
+        if (wa != null) for (Object w : wa) {
+            Long id = Json.lng(w, "worldId");
+            List<Object> rs = Json.arr(w, "regions");
+            if (id == null || id < 0 || id > 255 || rs == null || rs.size() > 64) continue;
+            WorldArea a = new WorldArea();
+            a.worldId = id.intValue();
+            String n = Json.str(w, "name");
+            a.name = n != null && n.length() <= 64 ? n : null;
+            for (Object x : rs) {
+                String key = Json.str(x, "region"), rn = Json.str(x, "name");
+                if (key == null || !key.matches("sub[0-9]{2}")) continue;
+                a.regions.add(new String[] { key, rn != null && rn.length() <= 64 ? rn : null });
+            }
+            r.worldAreas.add(a);
         }
         List<Object> th = Json.arr(o, "thresholds");
         if (th != null) {
@@ -144,6 +168,18 @@ final class Objectives {
         for (MapEntry e : h.map)
             if (e.mapId == chosen.mapId && bit(e.show, k) && bit(e.marker, k) && !markers.contains(e.markerIndex)) markers.add(e.markerIndex);
         return new HuntMap(chosen.mapId, markers);
+    }
+
+    /** 0.17.0: the world-map areas a kind-0 hunt's map shows at this raw stage (every showing entry, in file order). */
+    List<WorldArea> areasFor(Hunt h, int stage) {
+        List<WorldArea> out = new ArrayList<>();
+        if (h == null || h.mapKind != 0 || stage < 0 || stage > 255) return out;
+        int k = Math.min(stage / 5, 50);
+        for (MapEntry e : h.map) {
+            if (!bit(e.show, k)) continue;
+            for (WorldArea a : worldAreas) if (a.worldId == e.regionId && !out.contains(a) && !a.regions.isEmpty()) out.add(a);
+        }
+        return out;
     }
 
     /** The game's current map hint (0x3BD950), or null without live flags or when no row applies. */

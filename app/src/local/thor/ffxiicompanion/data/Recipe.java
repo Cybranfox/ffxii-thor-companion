@@ -17,6 +17,7 @@ public final class Recipe {
             "ps2data/image/ff12/myoshiok/us/quest/menuquest.dat",
             "ps2data/image/ff12/myoshiok/us/quest/menuquest01.bin",
             "ps2data/image/ff12/myoshiok/us/tm2_menu/loca_8_c.tm2",
+            "ps2data/image/ff12/myoshiok/us/worldmap/menumap_area.bin",
             "ps2data/image/ff12/myoshiok/us/worldmap/menumap_common.bin",
             "ps2data/image/ff12/myoshiok/us/worldmap/menumap_guide00.bin",
             "ps2data/image/ff12/myoshiok/us/worldmap/menumap_location.bin",

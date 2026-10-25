@@ -13,7 +13,7 @@ P=src/local/thor/ffxiicompanion
   $P/Json.java $P/Flags.java $P/Objectives.java $P/Target.java $P/PageTable.java $P/DataFiles.java $P/Details.java $P/Snapshot.java $P/Party.java $P/ReceiverState.java $P/SnapshotOrder.java $P/Place.java $P/LoaderStatus.java \
   $P/AutoClosePolicy.java $P/Atlas.java $P/AtlasFiles.java $P/Reveal.java $P/Regions.java $P/Position.java $P/Reference.java $P/Gambits.java $P/GambitEdit.java $P/Build.java $P/LicenceNodes.java $P/GambitPlan.java $P/ApplyPlan.java $P/Equipped.java $P/EquipTable.java $P/Optimize.java $P/ItemCheck.java $P/LicenceBoards.java $P/LicenceRules.java $P/PackCheck.java $P/PackBuild.java $P/DataOwner.java $P/DataStatus.java $P/SetupFlow.java $P/SetupInputs.java $P/SetupText.java \
   $P/data/*.java \
-  tests/SnapshotOrderTest.java tests/ReceiverStateTest.java tests/AutoClosePolicyTest.java tests/RevealTest.java tests/AtlasTest.java tests/ReferenceTest.java tests/StatusDataTest.java tests/StatusTablesTest.java tests/GambitsTest.java tests/GambitEditTest.java tests/BuildTest.java tests/GambitPlanTest.java tests/ApplyTest.java tests/OptimizeTest.java tests/LicenceBoardsTest.java tests/LicenceRulesTest.java tests/PlaceTest.java tests/ActionNamesTest.java tests/SetActiveTest.java tests/LoaderStatusTest.java tests/DataFilesTest.java tests/TargetTest.java tests/PageTableTest.java tests/FlagsTest.java tests/ObjectivesTest.java tests/DataBuilderTest.java tests/CopyJobDriver.java tests/PackSwapTest.java tests/PackBuildTest.java tests/DataOwnerTest.java tests/DataStatusTest.java tests/SetupFlowTest.java tests/SetupInputsTest.java
+  tests/SnapshotOrderTest.java tests/ReceiverStateTest.java tests/AutoClosePolicyTest.java tests/RevealTest.java tests/AtlasTest.java tests/ReferenceTest.java tests/StatusDataTest.java tests/StatusTablesTest.java tests/GambitsTest.java tests/GambitEditTest.java tests/BuildTest.java tests/GambitPlanTest.java tests/ApplyTest.java tests/OptimizeTest.java tests/LicenceBoardsTest.java tests/LicenceRulesTest.java tests/PlaceTest.java tests/ActionNamesTest.java tests/SetActiveTest.java tests/LoaderStatusTest.java tests/DataFilesTest.java tests/TargetTest.java tests/PageTableTest.java tests/FlagsTest.java tests/ObjectivesTest.java tests/RegionHuntReviewTest.java tests/WorldAreasReviewTest.java tests/DataBuilderTest.java tests/CopyJobDriver.java tests/PackSwapTest.java tests/PackBuildTest.java tests/DataOwnerTest.java tests/DataStatusTest.java tests/SetupFlowTest.java tests/SetupInputsTest.java
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.StatusDataTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.data.StatusTablesTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.AutoClosePolicyTest
@@ -26,6 +26,8 @@ mkdir -p tests/out
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.PageTableTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.FlagsTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.ObjectivesTest
+"$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.RegionHuntReviewTest tests/fixtures
+"$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.data.WorldAreasReviewTest
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.ActionNamesTest
 mkdir -p tests/out
 "$JDK/bin/java" -ea -cp tests/classes local.thor.ffxiicompanion.SetActiveTest tests/out
