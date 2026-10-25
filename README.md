@@ -11,11 +11,29 @@ the game in real time.
 
 | Tab | What you get |
 |---|---|
-| **Status** | Where you are, a map of the areas you have explored with a "you are here" marker, the game's map symbols and exit labels (tap it for a full-size map you can zoom and drag), live party HP/MP, the enemy your party is targeting (level, HP, weaknesses), the game's own "where to go next" hint, and (optional) your accepted hunts. |
+| **Status** | Where you are, a map of the areas you have explored with a "you are here" marker, the game's map symbols and exit labels (tap it for a full-size map you can zoom and drag), live party HP/MP and status effects, the enemy your party is targeting (level, HP, weaknesses), the game's own "where to go next" hint, and (optional) your accepted hunts. Tap a hunt to see where the game's hunt map points. |
 | **Gambits** | Every member's gambits as the game has them right now, with item counts ("Potion ×14", "0 left" warnings). **Suggest** builds a gambit set from what that character owns and is licensed for. The optional **editor** can apply a change or a whole suggested set to the running game, and switch which set (I/II/III) a character uses. |
 | **Equip** | Each member's equipped gear, plus what the game's own **Optimize** would change. Descriptions come from optional mods. |
 | **Bestiary** | Bestiary pages by location (with an optional mod). |
 | **Licenses** | Both job boards per character: owned, buyable now (the game's exact rules, including Espers, Quickenings and the Second Board), and the cheapest route to any license. |
+
+## New in 0.17
+
+I've brought the bottom screen closer to the game's menus, with a softly moving slate background, plain menu words
+down the left, a pointing-glove cursor, and paper pages for Bestiary and the full map. Thanks for the Reddit feedback.
+It helped shape this update. The interface art is drawn for this app, and Roboto and Michroma use the SIL Open Font
+License. No Square Enix artwork, fonts or sounds are bundled.
+
+Gambits now shows one set at a time. Tap I, II or III to look through them. The gambit editor, its safety checks and
+confirmation steps are unchanged.
+
+Accepted hunts have a map link under Status › Hunts. It follows your progress and opens the place the game's own
+**View Hunt Map** points to. Most have a marker; one offers several regions to choose from. These are the game's
+hunt-map destinations, not exact spawn points. Ground you haven't explored stays hidden. Hunts remain optional.
+
+**Updating from an earlier version? Rebuild your game data once** for the hunt maps: Status › Details › Rebuild, with
+the game running (playing or at the title screen) until it finishes. New installs get this in their first build. You
+don't need to run `install.cmd` again.
 
 There are three pieces, and each only does its own job:
 

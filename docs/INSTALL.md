@@ -68,6 +68,10 @@ The names, licence boards and maps come from **your own** game files. The compan
 Tap **Rebuild** after you add or remove the optional text mods (Dynamic Equipment Description / Descriptive Inventory,
 Foedex Clan Primer). The data is built from your files for your own use. Please don't share it.
 
+The data includes the game's hunt-map destinations. With Hunts turned on under Status, tap an accepted hunt to open
+its map. If it names several regions, tap the hunt to show the choices, then pick a region. Only explored ground is
+drawn. These maps show where the game's **View Hunt Map** points, not exact spawn points.
+
 **Alternative: build on a PC.** The data builder from Releases does the same from your Steam folder:
 1. Download `FFXII-Thor-Companion-data-builder-<version>.zip` and unzip it. Install
    [Python 3.10+](https://www.python.org/downloads/) if you don't have it (tick "Add python.exe to PATH").
@@ -95,7 +99,11 @@ one.
   the next game start and runs it. The app's Details panel shows the running script's version.
 - **Coming from 0.10.0 or older:** run `install.cmd` in the container **one last time** to install the loader.
 - **The loader itself:** only if a release note says so (rare), run `install.cmd` again.
-- **Game data:** tap **Rebuild** only if a release note says so, or after changing the optional text mods.
+- **Coming to 0.17 from an earlier version:** rebuild your game data once for the hunt maps and journal lines.
+  Install the new APK, open it, then start the game. In the companion, tap **Status › Details › Rebuild** and keep the
+  game running (playing or at the title screen) until it finishes. You don't need to run `install.cmd` again. If you
+  use the PC builder, use the 0.17 builder and copy its new output over your existing game data instead.
+- **After that:** tap **Rebuild** only if a release note says so, or after changing the optional text mods.
 
 If the app ever says "The game reports: …", the loader refused to run the game script and the message says what to do.
 Usually it's "open this app once, then restart the game".

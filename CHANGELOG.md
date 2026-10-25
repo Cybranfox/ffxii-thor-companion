@@ -1,5 +1,31 @@
 # Changelog
 
+## 0.17.0-beta
+- **A new look for the bottom screen.** I've brought the companion closer to the game's menus: a softly moving slate
+  background, black help and detail bars, plain menu words down the left, and a pointing-glove cursor. Thanks for the
+  Reddit feedback on how the app looked. It helped shape this update.
+- **Gambits show one set at a time.** Tap I, II or III to look through them. The set the game is using is still marked.
+  The gambit editor, its safety checks and all confirmation steps are unchanged.
+- **Quieter party rows.** HP and MP sit beside the name, with a thin line under HP and smaller maximum values. Status
+  effects are coloured words underneath, with the bad ones first.
+- **Plain lists and paper pages.** Equip and Bestiary entries are one line, with the details on the right. Bestiary
+  and the full map use a parchment background; the full map has darker ground and labels so they stay readable.
+- **Targeting, Setup and Details fit the new menus.** Element names are words with a small coloured dot instead of
+  chips, and Targeting says "No target" when the live game reports none. Setup keeps its ordered checks and one next
+  action, and there's only one Build button at a time now.
+- **Hunt maps.** Tap an accepted hunt under Status › Hunts and the full map opens on the map the game's own hunt map
+  would show you right now, with its marker ringed in gold. It follows your progress the same way the game does (town,
+  then the mark's area, then back to town to report). It's where the game points you, not where the mark spawns, and
+  ground you haven't explored stays hidden. The one hunt whose map covers several regions lets you pick a region.
+- **The whole hunt journal shows.** A few journal lines name a person (like the petitioner you report back to) and
+  used to be left out. They now show with the name filled in from your game files.
+- All the new interface artwork is drawn for this app, with Roboto and Michroma under the SIL Open Font License.
+  No Square Enix artwork, fonts or sounds are bundled.
+- Updating: install the new APK and restart the game. Then **rebuild your game data once** (Status › Details ›
+  Rebuild) for the hunt maps and journal lines; it copies two more small files from your game. If you use the PC
+  builder, re-run the 0.17 one.
+- Still open: the exit hang under GameNative. Use the Quick Menu › Exit for now.
+
 ## 0.16.1-beta
 - **Status chips on the party.** Each party member now shows their status effects under the HP bar, with the game's own
   names: bad ones (Poison, Silence, Slow and so on) as filled red chips first, buffs (Protect, Shell, Haste, Regen...)
