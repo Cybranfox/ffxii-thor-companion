@@ -227,7 +227,7 @@ public class MainActivity extends Activity {
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         frame.addView(root, new android.widget.FrameLayout.LayoutParams(-1, -1));
-        root.setPadding(dp(12), 0, dp(12), 0);
+        root.setPadding(dp(12), 0, 0, 0);                   // 0.17.0: the right margin lives on the pages (see content)
         root.setClipToPadding(false);                       // 0.17.0: the black bars run edge to edge
 
         // 0.17.0, the game's top black bar: a one-line help sentence with a small square mark, the live state on the
@@ -238,7 +238,7 @@ public class MainActivity extends Activity {
         topBar.setPadding(dp(12), dp(6), dp(12), dp(4));
         LinearLayout.LayoutParams tbp = new LinearLayout.LayoutParams(-1, -2);
         tbp.leftMargin = -dp(12);
-        tbp.rightMargin = -dp(12);
+        tbp.rightMargin = 0;
         LinearLayout header = new LinearLayout(this);
         header.setGravity(Gravity.CENTER_VERTICAL);
         TextView mark = text("i", 10, 0xFF000000, true);
@@ -269,7 +269,7 @@ public class MainActivity extends Activity {
         banner.setPadding(dp(10), dp(3), dp(10), dp(3));
         banner.setBackground(round(SYNTH, 6));
         banner.setVisibility(View.GONE);
-        root.addView(banner);
+        root.addView(banner, edgeParams());
 
         grant = new Button(this);
         grant.setText("Allow file access");
@@ -279,7 +279,7 @@ public class MainActivity extends Activity {
                     Uri.parse("package:" + getPackageName()));
             startActivity(i);
         });
-        root.addView(grant);
+        root.addView(grant, edgeParams());
 
         // 0.17.0: the pages as a command list down the left, as the game's main menu (one tap to any page; the glove
         // marks the open one); the page fills the rest. Reference browsers load their bundle on first use.
@@ -302,6 +302,8 @@ public class MainActivity extends Activity {
         LinearLayout mainRow = new LinearLayout(this);
         LinearLayout content = new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(0, 0, dp(12), 0);                // pages keep a right margin; parchment pages run into it
+        content.setClipToPadding(false);
         mainRow.addView(tabRow, new LinearLayout.LayoutParams(dp(100), -1));
         mainRow.addView(content, new LinearLayout.LayoutParams(0, -1, 1));
         root.addView(mainRow, new LinearLayout.LayoutParams(-1, 0, 1));
@@ -327,10 +329,6 @@ public class MainActivity extends Activity {
         licencesView.setVisibility(View.GONE);
         content.addView(licencesView, new LinearLayout.LayoutParams(-1, 0, 1));
         content.addView(buildMapPage(), paperParams());
-        // 0.17.0: the parchment pages run to the right edge of the screen, past the band's margin
-        root.setClipChildren(false);
-        mainRow.setClipChildren(false);
-        content.setClipChildren(false);
         referenceMissing = text("", 13, DIM, false);
         referenceMissing.setPadding(dp(6), dp(10), dp(6), dp(10));
         referenceMissing.setVisibility(View.GONE);
@@ -342,7 +340,7 @@ public class MainActivity extends Activity {
         footBar.addView(statusDetail, new LinearLayout.LayoutParams(-1, -2));
         LinearLayout.LayoutParams fbp = new LinearLayout.LayoutParams(-1, -2);
         fbp.leftMargin = -dp(12);
-        fbp.rightMargin = -dp(12);
+        fbp.rightMargin = 0;
         root.addView(footBar, fbp);
 
         // 0.16.0 Setup: five ordered checks, one action for the first problem (SetupFlow); shown on first run, when a
@@ -527,7 +525,7 @@ public class MainActivity extends Activity {
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
         head.setBackgroundColor(0xFFC6B28D);
-        head.setPadding(dp(12), head.getPaddingTop(), head.getPaddingRight(), head.getPaddingBottom());
+        head.setPadding(dp(12), head.getPaddingTop(), dp(12), head.getPaddingBottom());
         TextView mapTitle = cardHeading("MAP");
         mapTitle.setTextColor(Theme.INK);
         mapTitle.setShadowLayer(0, 0, 0, 0);
@@ -1014,6 +1012,13 @@ public class MainActivity extends Activity {
         v.setPadding(0, dp(3), 0, 0);
         c.addView(v);
         return v;
+    }
+
+    /** 0.17.0: full width less the right margin the root no longer has. */
+    LinearLayout.LayoutParams edgeParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+        lp.rightMargin = dp(12);
+        return lp;
     }
 
     /** 0.17.0: a parchment page fills its slot and runs on over the root's right margin to the screen edge. */
