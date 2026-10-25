@@ -322,11 +322,15 @@ public class MainActivity extends Activity {
         content.addView(gearView, new LinearLayout.LayoutParams(-1, 0, 1));
         bestiaryView = new ReferenceView(this, Theme.INK, Theme.INK_DIM, Theme.INK_ACCENT, CARD, BG, true);   // 0.17.0: parchment
         bestiaryView.setVisibility(View.GONE);
-        content.addView(bestiaryView, new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(bestiaryView, paperParams());
         licencesView = new LicencesView(this);
         licencesView.setVisibility(View.GONE);
         content.addView(licencesView, new LinearLayout.LayoutParams(-1, 0, 1));
-        content.addView(buildMapPage(), new LinearLayout.LayoutParams(-1, 0, 1));
+        content.addView(buildMapPage(), paperParams());
+        // 0.17.0: the parchment pages run to the right edge of the screen, past the band's margin
+        root.setClipChildren(false);
+        mainRow.setClipChildren(false);
+        content.setClipChildren(false);
         referenceMissing = text("", 13, DIM, false);
         referenceMissing.setPadding(dp(6), dp(10), dp(6), dp(10));
         referenceMissing.setVisibility(View.GONE);
@@ -349,6 +353,9 @@ public class MainActivity extends Activity {
         setupRows.setOrientation(LinearLayout.VERTICAL);
         setupCard.addView(setupRows);
         setupButton = pageButton("");
+        setupButton.setMinHeight(dp(48));
+        setupButton.setBackground(round(Theme.MARK, 0));
+        setupButton.setTextColor(TEXT);
         setupButton.setVisibility(View.GONE);
         setupButton.setOnClickListener(x -> setupAction());
         LinearLayout.LayoutParams sbp = new LinearLayout.LayoutParams(-2, -2);
@@ -481,25 +488,27 @@ public class MainActivity extends Activity {
         details = new LinearLayout(this);
         details.setOrientation(LinearLayout.VERTICAL);
         details.setVisibility(View.GONE);
-        LinearLayout row = new LinearLayout(this);
-        session = card(row, "Session");
-        caps = card(row, "Data feeds");
-        details.addView(row);
-        LinearLayout row2 = new LinearLayout(this);
-        mods = card(row2, "Mods");
-        build = card(row2, "Game build");
-        details.addView(row2);
+        // 0.17.0: plain label/value rows, with the same full diagnostic text and no nested cards.
+        details.setBackground(Theme.section(dp(1)));
+        session = detailRow(details, "Session");
+        caps = detailRow(details, "Data feeds");
+        mods = detailRow(details, "Mods");
+        build = detailRow(details, "Game build");
         dataQuietRow = new LinearLayout(this);
         dataQuietRow.setGravity(Gravity.CENTER_VERTICAL);
         dataQuietRow.setPadding(dp(8), dp(8), dp(8), dp(2));
         dataQuiet = text("", 14, GOOD, false);
         dataQuietRow.addView(dataQuiet, new LinearLayout.LayoutParams(0, -2, 1));
         dataQuietButton = pageButton("Rebuild");
+        dataQuietButton.setMinHeight(dp(48));
+        dataQuietButton.setBackground(null);
         dataQuietButton.setOnClickListener(x -> dataAction());
         dataQuietRow.addView(dataQuietButton);
         details.addView(dataQuietRow);
         TextView setupLink = text("Setup checks", 14, ACCENT, true);
         setupLink.setPadding(dp(8), dp(8), dp(8), dp(8));
+        setupLink.setMinHeight(dp(48));
+        setupLink.setTextColor(TEXT);
         setupLink.setOnClickListener(x -> { setupOpen = !setupOpen; if (lastView != null) showSetup(lastView); });
         details.addView(setupLink);
         body.addView(details);
@@ -512,10 +521,17 @@ public class MainActivity extends Activity {
     View buildMapPage() {
         mapPage = new LinearLayout(this);
         mapPage.setOrientation(LinearLayout.VERTICAL);
+        // 0.17.0: original paper for the full map only; the smoked mini-map keeps its own palette.
+        mapPage.setBackground(Theme.paper(dp(520)));
         mapPage.setVisibility(View.GONE);
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
-        head.addView(cardHeading("MAP"), new LinearLayout.LayoutParams(0, -2, 1));
+        head.setBackgroundColor(0xFFC6B28D);
+        head.setPadding(dp(12), head.getPaddingTop(), head.getPaddingRight(), head.getPaddingBottom());
+        TextView mapTitle = cardHeading("MAP");
+        mapTitle.setTextColor(Theme.INK);
+        mapTitle.setShadowLayer(0, 0, 0, 0);
+        head.addView(mapTitle, new LinearLayout.LayoutParams(0, -2, 1));
         mapRecentre = pageButton("Re-centre");
         mapRecentre.setVisibility(View.GONE);
         mapRecentre.setOnClickListener(x -> bigMap.recentre());
@@ -525,9 +541,16 @@ public class MainActivity extends Activity {
         LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(-2, -2);
         clp.leftMargin = dp(8);
         head.addView(close, clp);
+        mapRecentre.setBackground(null);
+        mapRecentre.setTextColor(Theme.INK);
+        mapRecentre.setShadowLayer(0, 0, 0, 0);
+        close.setBackground(null);
+        close.setTextColor(Theme.INK);
+        close.setShadowLayer(0, 0, 0, 0);
         mapPage.addView(head);
         optionsRow = new LinearLayout(this);              // 0.14.0: map options, remembered
         optionsRow.setPadding(0, dp(4), 0, 0);
+        optionsRow.setBackgroundColor(0xFFC6B28D);
         for (String[] o : new String[][] {{OPT_SYMBOLS, "Symbols"}, {OPT_HINT, "Story hint"}, {OPT_HUNTS, "Hunts"}}) {
             TextView chip = pageButton("");
             chip.setTextSize(12);
@@ -544,14 +567,17 @@ public class MainActivity extends Activity {
         }
         mapPage.addView(optionsRow);
         styleOptions();
-        bigMap = new RevealMapView(this, PARCHMENT, PARCHMENT_DIM, MAP_LINK, TEXT, BG, 12, true);
+        bigMap = new RevealMapView(this, 0xFF5B5142, 0xFF685D4A, 0xFF68563D, Theme.INK, 0xFFC6B28D, 12, true);
+        bigMap.setBackgroundColor(0xFFC6B28D);              // keep light paper behind all geometry and labels
         bigMap.setOnMoved(moved -> mapRecentre.setVisibility(moved ? View.VISIBLE : View.GONE));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(-1, 0, 1);
         blp.topMargin = dp(4);
         mapPage.addView(bigMap, blp);
-        mapPageNote = text("Pinch to zoom, drag to move. Double-tap: this area / the whole region.", 11, DIM, false);
+        mapPageNote = text("Pinch to zoom, drag to move. Double-tap: this area / the whole region.", 11, Theme.INK_DIM, false);
+        mapPageNote.setShadowLayer(0, 0, 0, 0);
+        mapPageNote.setBackgroundColor(0xFFC6B28D);
         oneLine(mapPageNote);
-        mapPageNote.setPadding(0, dp(3), 0, 0);
+        mapPageNote.setPadding(dp(12), dp(4), dp(12), dp(4));
         mapPage.addView(mapPageNote);
         return mapPage;
     }
@@ -570,8 +596,9 @@ public class MainActivity extends Activity {
             TextView c = (TextView) optionsRow.getChildAt(i);
             boolean on = option((String) c.getTag());
             c.setText((on ? "\u2713 " : "") + names[i]);
-            c.setBackground(round(on ? Theme.MARK : CARD, 14));
-            c.setTextColor(on ? TEXT : DIM);
+            c.setBackground(on ? round(Theme.MARK, 0) : null);
+            c.setTextColor(Theme.INK);
+            c.setShadowLayer(0, 0, 0, 0);
         }
     }
 
@@ -811,8 +838,16 @@ public class MainActivity extends Activity {
             boolean busy = st.state == SetupFlow.State.MISSING && SetupText.inProgress(st.messageKey);   // work, not a fault
             String mark = st.state == SetupFlow.State.OK ? "\u2713 " : busy ? "\u2026 " : st.state == SetupFlow.State.MISSING ? "! " : "? ";
             int color = st.state == SetupFlow.State.OK ? GOOD : busy ? ACCENT : st.state == SetupFlow.State.MISSING ? BAD : DIM;
-            TextView row = text(mark + SetupText.title(st.id) + ": " + SetupText.line(st.messageKey), 14, color, false);
-            row.setPadding(0, dp(2), 0, dp(2));
+            // 0.17.0: keep the reducer's order and unknown marks; only the small state mark is coloured.
+            android.text.SpannableString line = new android.text.SpannableString(
+                    mark + SetupText.title(st.id) + ": " + SetupText.line(st.messageKey));
+            line.setSpan(new android.text.style.ForegroundColorSpan(color), 0, mark.length(),
+                    android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+            TextView row = text("", 14, TEXT, false);
+            row.setText(line);
+            row.setMinHeight(dp(48));
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            row.setPadding(dp(8), dp(8), dp(8), dp(8));
             setupRows.addView(row);
         }
         if (allSet) {
@@ -979,6 +1014,30 @@ public class MainActivity extends Activity {
         v.setPadding(0, dp(3), 0, 0);
         c.addView(v);
         return v;
+    }
+
+    /** 0.17.0: a parchment page fills its slot and runs on over the root's right margin to the screen edge. */
+    LinearLayout.LayoutParams paperParams() {
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, 0, 1);
+        lp.rightMargin = -dp(12);
+        return lp;
+    }
+
+    /** 0.17.0: a diagnostic label and its unchanged, wrapping value, on the shared menu band. */
+    TextView detailRow(LinearLayout parent, String heading) {
+        LinearLayout row = new LinearLayout(this);
+        row.setGravity(Gravity.TOP);                              // the label level with the value's first line
+        row.setMinimumHeight(dp(48));
+        row.setPadding(dp(8), dp(8), dp(8), dp(8));
+        TextView h = text(heading.toUpperCase(java.util.Locale.ROOT), 10, Theme.HEAD, false);
+        h.setPadding(0, dp(3), 0, 0);
+        h.setLetterSpacing(0.08f);
+        row.addView(h, new LinearLayout.LayoutParams(dp(90), -2));
+        TextView value = text("", 13, TEXT, false);
+        value.setLineSpacing(dp(1), 1f);
+        row.addView(value, new LinearLayout.LayoutParams(0, -2, 1));
+        parent.addView(row, new LinearLayout.LayoutParams(-1, -2));
+        return value;
     }
 
     TextView card(LinearLayout row, String heading) {
@@ -1379,7 +1438,20 @@ public class MainActivity extends Activity {
                 && (s.synthetic ? fixtureMode : Reveal.buildVerified(s.hello()));
         List<Target.Enemy> enemies = ok ? Target.enemies(Json.obj(s.data, "target")) : java.util.Collections.emptyList();
         targetRows.removeAllViews();
-        targetCard.setVisibility(enemies.isEmpty() ? View.GONE : View.VISIBLE);
+        // 0.17.0: an explicit empty state, distinct from missing, stale or invalid target data.
+        targetCard.setVisibility(View.VISIBLE);
+        if (enemies.isEmpty()) {
+            Map<String, Object> target = ok ? Json.obj(s.data, "target") : null;
+            List<Object> observed = target != null ? Json.arr(target, "members") : null;
+            boolean hasEnemy = false;
+            if (observed != null) for (Object member : observed)
+                if ("enemy".equals(Json.str(Json.obj(member, "target"), "kind"))) hasEnemy = true;
+            boolean empty = target != null && Target.CONTRACT.equals(Json.str(target, "contract"))
+                    && "ok".equals(Json.str(target, "status")) && observed != null && !hasEnemy;
+            // only "No target" when the game says so; without live target data the card stays out of the way
+            if (empty) targetRows.addView(text("No target", 14, DIM, false));
+            else targetCard.setVisibility(View.GONE);
+        }
         for (int i = 0; i < Math.min(2, enemies.size()); i++) {
             LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
             lp.topMargin = dp(4);
@@ -1399,7 +1471,7 @@ public class MainActivity extends Activity {
         LinearLayout r = new LinearLayout(this);
         r.setOrientation(LinearLayout.VERTICAL);
         r.setPadding(dp(8), dp(4), dp(8), dp(5));
-        r.setBackground(round(TRACK, 6));
+        r.setBackground(null);                              // 0.17.0: words on the shared smoked band
         Reference.Entry entry = Target.entry(e, this::loadReference);
         LinearLayout head = new LinearLayout(this);
         head.setGravity(Gravity.CENTER_VERTICAL);
@@ -1413,14 +1485,20 @@ public class MainActivity extends Activity {
         LinearLayout hpLine = new LinearLayout(this);
         hpLine.setGravity(Gravity.CENTER_VERTICAL);
         hpLine.addView(text("HP", 13, DIM, false), new LinearLayout.LayoutParams(0, -2, 1));
-        TextView hpn = text(num(e.hp) + " / " + num(e.maxHp), 15, e.hp > 0 ? TEXT : DIM, false);
+        TextView hpn = text("", 17, e.hp > 0 ? TEXT : DIM, false);
+        android.text.SpannableStringBuilder hpText = new android.text.SpannableStringBuilder(String.valueOf(e.hp));
+        int maxStart = hpText.length();
+        hpText.append("/").append(String.valueOf(e.maxHp));
+        hpText.setSpan(new android.text.style.RelativeSizeSpan(12f / 17f), maxStart, hpText.length(),
+                android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        hpn.setText(hpText);
+        hpn.setPadding(0, 0, 0, dp(2));
+        hpn.setBackground(hpLine(hpv, e.hp > 0 ? toneColor(Party.tone(hpv), Theme.GOLD) : DIM));
         oneLine(hpn);
         hpLine.addView(hpn);
         r.addView(hpLine);
-        r.addView(bar(hpv, e.hp > 0 ? toneColor(Party.tone(hpv), Theme.GOLD) : DIM));
-        // Affinities as chips that wrap like words; the words stay (colour alone never carries the meaning).
+        // 0.17.0: affinity words keep their group labels; colour never replaces their meaning.
         android.text.SpannableStringBuilder sb = new android.text.SpannableStringBuilder();
-        float density = getResources().getDisplayMetrics().density;
         for (Target.Group g : Target.groups(e)) {
             if (sb.length() > 0) sb.append("\n");
             sb.append(g.label).append("  ");
@@ -1430,10 +1508,7 @@ public class MainActivity extends Activity {
                 Reference names = loadReference();                    // 0.16.0: the game's own element names
                 String en = names != null ? names.elementName(i) : null;
                 sb.append(en != null ? en : Target.ELEMENTS[i]);
-                ChipSpan.Style st = g.kind == Target.Group.Kind.ABSORB ? ChipSpan.Style.OUTLINE
-                        : g.kind == Target.Group.Kind.IMMUNE ? ChipSpan.Style.STRUCK : ChipSpan.Style.FILL;
-                int col = g.kind == Target.Group.Kind.HALF ? (ELEMENT_COLORS[i] & 0x00FFFFFF) | 0x80000000 : ELEMENT_COLORS[i];
-                sb.setSpan(new ChipSpan(col, g.kind == Target.Group.Kind.HALF ? TEXT : BG, st, density), s0, sb.length(),
+                sb.setSpan(new android.text.style.ForegroundColorSpan(ELEMENT_COLORS[i]), s0, sb.length(),
                         android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
                 sb.append(" ");
             }

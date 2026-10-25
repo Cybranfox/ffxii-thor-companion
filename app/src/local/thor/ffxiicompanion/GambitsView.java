@@ -73,13 +73,15 @@ final class GambitsView extends LinearLayout {
         armRow.addView(armLine);
         armConfirm = tv("The editor changes gambits in the running game, one slot at a time, and the game checks each"
                 + " change before it lands. Saves are never touched. It turns on at the next game start. Tap again to turn it on.", 12, warn, false);
+        armConfirm.setPadding(dp(8), dp(8), dp(8), dp(8));
+        armConfirm.setBackground(Theme.section(dp(1)));
         armConfirm.setVisibility(GONE);
         armRow.addView(armConfirm);
         addView(armRow);
         editBar = new LinearLayout(c);
         editBar.setOrientation(VERTICAL);
-        editBar.setPadding(dp(10), dp(6), dp(10), dp(6));
-        editBar.setBackground(round(card, 8));
+        editBar.setPadding(dp(12), dp(8), dp(12), dp(8));
+        editBar.setBackground(Theme.section(dp(1)));           // 0.17.0: ruled confirmation, not a boxed card
         editMsg = tv("", 13, text, false);
         editBar.addView(editMsg);
         pickRow = new LinearLayout(c);
@@ -327,9 +329,9 @@ final class GambitsView extends LinearLayout {
             editToggle.setVisibility(GONE);
             editChange.setVisibility(GONE);
             pickRow.setVisibility(VISIBLE);
-            pickCond.setBackground(round(pickMode == 1 ? Theme.MARK : bg, 14));
+            pickCond.setBackground(pickMode == 1 ? round(Theme.MARK, 0) : null);
             pickCond.setTextColor(text);
-            pickAct.setBackground(round(pickMode == 2 ? Theme.MARK : bg, 14));
+            pickAct.setBackground(pickMode == 2 ? round(Theme.MARK, 0) : null);
             pickAct.setTextColor(text);
         } else if (p.confirmToggle) {
             editMsg.setText((p.turnOn ? "Turn ON  " : "Turn OFF  ") + p.where() + "\n" + now + tail);
@@ -378,8 +380,12 @@ final class GambitsView extends LinearLayout {
             TextView t = tv(m.name + (Gambits.MEMBER_VERIFIED[m.id] ? "" : "*"), 12, text, true);
             t.setSingleLine(true);
             boolean on = m.id == selected;
-            t.setPadding(on ? dp(14) : dp(10), dp(4), dp(10), dp(4));
-            t.setBackground(round(on ? Theme.MARK : card, 12));
+            // 0.17.0: a flat member strip; selection has a wash, never a boxed plate or another glove.
+            t.setMinHeight(dp(48));
+            t.setGravity(Gravity.CENTER);
+            t.setPadding(dp(10), dp(4), dp(10), dp(4));
+            t.setBackground(on ? round(Theme.MARK, 0) : null);
+            t.setSelected(on);
             t.setTextColor(text);
             final int id = m.id;
             t.setOnClickListener(v -> { selected = id; viewedSet = -1; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
@@ -390,8 +396,11 @@ final class GambitsView extends LinearLayout {
         if (plans != null) {   // 0.13.0: suggestions (read-only)
             TextView sg = tv(suggestMode ? "✦ Suggested" : "✦ Suggest", 12, suggestMode ? text : accent, true);
             sg.setSingleLine(true);
-            sg.setPadding(suggestMode ? dp(14) : dp(10), dp(4), dp(10), dp(4));
-            sg.setBackground(round(suggestMode ? Theme.MARK : card, 12));
+            sg.setMinHeight(dp(48));
+            sg.setGravity(Gravity.CENTER);
+            sg.setPadding(dp(10), dp(4), dp(10), dp(4));
+            sg.setBackground(suggestMode ? round(Theme.MARK, 0) : null);
+            sg.setSelected(suggestMode);
             sg.setOnClickListener(v -> { suggestMode = !suggestMode; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
             chips.addView(sg, new LayoutParams(-2, -2));
         }
@@ -769,8 +778,11 @@ final class GambitsView extends LinearLayout {
 
     private TextView button(String s, int fill, int color) {
         TextView t = tv(s, 13, color, true);
-        t.setPadding(dp(14), dp(6), dp(14), dp(6));
-        t.setBackground(round(fill, 14));
+        // 0.17.0: flat action words with a wash for the offered action; keep all existing confirm steps.
+        t.setMinHeight(dp(48));
+        t.setGravity(Gravity.CENTER);
+        t.setPadding(dp(12), dp(8), dp(12), dp(8));
+        t.setBackground(fill == Theme.MARK ? round(Theme.MARK, 0) : Theme.underline(density));   // an action, not a label
         return t;
     }
 

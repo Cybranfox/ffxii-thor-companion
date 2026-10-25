@@ -123,6 +123,22 @@ final class Theme {
         };
     }
 
+    /** 0.17.0: a short pale line under an action word, so a flat button still reads as one you can tap. */
+    static Drawable underline(float unitPx) {
+        return new Drawable() {
+            final Paint p = new Paint();
+            @Override public void draw(Canvas c) {
+                android.graphics.Rect b = getBounds();
+                float inset = unitPx * 10, y = b.bottom - unitPx * 9;
+                p.setColor(PANEL_EDGE);
+                c.drawRect(b.left + inset, y, b.right - inset, y + Math.max(1f, unitPx), p);
+            }
+            @Override public void setAlpha(int a) { }
+            @Override public void setColorFilter(ColorFilter cf) { }
+            @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+        };
+    }
+
     /** Plate: a small dark translucent plate with a thin pale edge (buttons, set tabs); sections use section(). */
     static GradientDrawable panel(float radiusPx, float edgePx) {
         GradientDrawable g = new GradientDrawable(GradientDrawable.Orientation.TOP_BOTTOM, new int[]{0x80202A33, PANEL});
@@ -169,24 +185,24 @@ final class Theme {
     static {
         // 0.17.0: an original pointing glove, drawn for this app on a 60 x 44 grid (cuff left, index finger right).
         // It follows the common "pointing hand" cursor convention; its shape is our own, not traced from any game.
-        GLOVE.moveTo(4, 12);                                   // cuff
-        GLOVE.lineTo(12, 10);
-        GLOVE.cubicTo(16, 6, 22, 4, 28, 6);                    // back of the hand up to the thumb
-        GLOVE.cubicTo(32, 7, 33, 11, 30, 13);                  // thumb tip folding in
-        GLOVE.lineTo(52, 13);                                  // top of the index finger
-        GLOVE.cubicTo(58, 13, 58, 22, 52, 22);                 // finger tip
-        GLOVE.lineTo(36, 22);                                  // underside of the index finger
-        GLOVE.cubicTo(39, 23, 39, 28, 35, 28);                 // middle finger knuckle
-        GLOVE.cubicTo(38, 29, 38, 34, 34, 34);                 // ring finger
-        GLOVE.cubicTo(37, 35, 36, 40, 31, 39);                 // little finger
-        GLOVE.lineTo(16, 38);
-        GLOVE.lineTo(12, 36);
-        GLOVE.lineTo(4, 34);
+        GLOVE.moveTo(4, 13);                                  // original narrower cuff and palm
+        GLOVE.lineTo(12, 11);
+        GLOVE.cubicTo(16, 7, 20, 5, 24, 6);
+        GLOVE.cubicTo(28, 7, 30, 10, 28, 14);
+        GLOVE.lineTo(51, 14);
+        GLOVE.cubicTo(57, 14, 57, 21, 51, 21);
+        GLOVE.lineTo(33, 21);
+        GLOVE.cubicTo(37, 22, 38, 27, 33, 28);
+        GLOVE.cubicTo(36, 29, 36, 33, 31, 34);
+        GLOVE.cubicTo(34, 36, 32, 39, 28, 38);
+        GLOVE.lineTo(17, 36);
+        GLOVE.lineTo(12, 33);
+        GLOVE.lineTo(4, 32);
         GLOVE.close();
-        FOLDS.moveTo(30, 22); FOLDS.lineTo(35, 22);
-        FOLDS.moveTo(29, 28); FOLDS.lineTo(34, 28);
-        FOLDS.moveTo(27, 34); FOLDS.lineTo(32, 34);
-        FOLDS.moveTo(12, 11); FOLDS.lineTo(12, 36);            // cuff seam
+        FOLDS.moveTo(12, 12); FOLDS.lineTo(12, 33);
+        FOLDS.moveTo(28, 22); FOLDS.lineTo(33, 22);
+        FOLDS.moveTo(27, 28); FOLDS.lineTo(32, 28);
+        FOLDS.moveTo(25, 33); FOLDS.lineTo(30, 33);
         GLOVE_FILL.setColor(0xFFF4F3EE);
         GLOVE_EDGE.setStyle(Paint.Style.STROKE);
         GLOVE_EDGE.setStrokeWidth(2.2f);
