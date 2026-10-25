@@ -355,7 +355,7 @@ final class Regions {
             v.neighbours++;
             shownMaps.add(sh.mapId);
         }
-        decorate(v, reg, shownMaps, s, atlas);
+        decorate(v, reg, shownMaps, s, atlas, false);
         return v;
     }
 
@@ -422,18 +422,26 @@ final class Regions {
             if (any) shownMaps.add(sh.mapId);
         }
         if (v.parts.isEmpty() || !v.parts.get(0).focus) { v.parts.clear(); v.note = "This hunt's map isn't in your map data."; return v; }
-        decorate(v, reg, shownMaps, s, atlas);
+        decorate(v, reg, shownMaps, s, atlas, true);
         if (v.targetExplored) {
+            Flags flags = Flags.parse(Json.obj(s.data, "flags"));
             Part t = v.parts.get(0);
             for (Icon i : reg.icons)
-                if (i.mapId == mapId && i.group == 9 && markers.contains(i.index))
+                if (i.mapId == mapId && i.group == 9 && markers.contains(i.index) && exploredIcon(t, i)
+                        && Flags.symbolVisible(flags, thresholds, i.group, i.index, i.type, i.sx, i.sy, i.gate, t.revealed))
                     v.targets.add(new Shown(i.type, t.x + i.dx, t.y + i.dy, t.x + i.dx, t.y + i.dy));
         }
         return v;
     }
 
+    // 0.17.0: hunt browsing keeps even fog-bypassing symbols off unexplored ground.
+    private static boolean exploredIcon(Part p, Icon i) {
+        int x = i.dx / 16, y = i.dy / 16;
+        return p.visible != null && cell(p.visible, x, y);
+    }
+
     /** Links, exit labels and symbols for the drawn areas (shared by build and buildHunt). */
-    private void decorate(View v, Region reg, List<Integer> shownMaps, Snapshot s, Atlas atlas) {
+    private void decorate(View v, Region reg, List<Integer> shownMaps, Snapshot s, Atlas atlas, boolean hunt) {
         // A link from an area to itself is the line out to one of its exits (all 99 in the game end at an exit point).
         for (Link l : reg.links) if (shownMaps.contains(l.a) && shownMaps.contains(l.b)) v.links.add(l);
         for (Exit e : reg.exits) {
@@ -447,7 +455,7 @@ final class Regions {
             for (Part p : v.parts) {
                 if (p.sheet.sheetsForMap > 1) continue;     // a symbol row names a map, not one of its sheets
                 for (Icon i : reg.icons) {
-                    if (i.mapId != p.sheet.mapId || !symbols.containsKey(i.type)) continue;
+                    if (i.mapId != p.sheet.mapId || !symbols.containsKey(i.type) || (hunt && !exploredIcon(p, i))) continue;
                     if (Flags.symbolVisible(flags, thresholds, i.group, i.index, i.type, i.sx, i.sy, i.gate, p.revealed))
                         v.symbols.add(i.group == 9 ? new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.dx, p.y + i.dy)   // no line
                                 : new Shown(i.type, p.x + i.dx, p.y + i.dy, p.x + i.sx, p.y + i.sy));

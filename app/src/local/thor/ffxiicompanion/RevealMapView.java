@@ -296,6 +296,10 @@ final class RevealMapView extends View {
                     || !a.sheet.file.equals(b.sheet.file) || !java.util.Arrays.deepEquals(a.visible, b.visible)
                     || !java.util.Arrays.deepEquals(a.revealed, b.revealed)) return false;
         }
+        for (int i = 0; i < v.targets.size(); i++) {
+            Regions.Shown a = v.targets.get(i), b = targets.get(i);
+            if (a.type != b.type || a.x != b.x || a.y != b.y) return false;
+        }
         for (int i = 0; i < v.symbols.size(); i++) {
             Regions.Shown a = v.symbols.get(i), b = shown.get(i);
             if (a.type != b.type || a.x != b.x || a.y != b.y) return false;

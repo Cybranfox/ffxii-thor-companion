@@ -630,9 +630,9 @@ public class MainActivity extends Activity {
         for (Objectives.Entry e : js) {
             LinearLayout r = new LinearLayout(this);
             r.setOrientation(LinearLayout.VERTICAL);
-            r.setPadding(dp(8), dp(4), dp(8), dp(5));
-            r.setBackground(round(TRACK, 6));
-            TextView n = text(e.hunt.title != null ? e.hunt.title : "Hunt " + e.hunt.questId, 13, TEXT, true);
+            r.setPadding(dp(4), dp(6), dp(4), dp(6));
+            r.setBackground(Theme.section(dp(1)));              // 0.17.0: a ruled journal row, as the party's
+            TextView n = text(e.hunt.title != null ? e.hunt.title : "Hunt " + e.hunt.questId, 15, TEXT, false);
             oneLine(n);
             r.addView(n);
             if (e.paragraph != null) {
@@ -753,6 +753,7 @@ public class MainActivity extends Activity {
         styleTabs();
         mapPage.setVisibility(View.GONE);
         huntQuest = null;
+        mapPageNote.setText(MAP_HELP);
         liveScroll.setVisibility(i == 0 ? View.VISIBLE : View.GONE);
         gearView.setVisibility(View.GONE);
         bestiaryView.setVisibility(View.GONE);

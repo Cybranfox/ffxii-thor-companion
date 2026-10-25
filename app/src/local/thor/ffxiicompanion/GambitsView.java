@@ -737,14 +737,15 @@ final class GambitsView extends LinearLayout {
     /** The I / II / III plates: tap to look at a set (only looks; "Use this set…" is still the separate, confirmed step). */
     private android.view.View setPlates(Gambits.Member m, int sets, int view) {
         LinearLayout h = new LinearLayout(getContext());
-        h.setPadding(0, dp(6), 0, 0);
+        h.setPadding(0, 0, 0, 0);
         for (int k = 0; k < sets; k++) {
             boolean on = k == view;
             TextView t = tv((k == 0 ? "I" : k == 1 ? "II" : "III") + (m.active == k ? " \u00b7" : ""), 13, on ? text : dim, true);
             t.setGravity(android.view.Gravity.CENTER);
             t.setMinWidth(dp(56));
+            t.setMinHeight(dp(48));                                // a full touch target; the plate look stays small
             t.setPadding(dp(12), dp(5), dp(12), dp(5));
-            t.setBackground(round(on ? Theme.MARK : card, 6));
+            t.setBackground(new android.graphics.drawable.InsetDrawable(round(on ? Theme.MARK : card, 6), 0, dp(7), 0, dp(7)));
             final int target = k;
             t.setOnClickListener(v -> { viewedSet = target; lastKey = null; show(this.members, this.reference, status.getText().toString(), true); });
             LayoutParams lp = new LayoutParams(-2, -2);
